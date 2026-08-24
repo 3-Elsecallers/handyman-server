@@ -20,7 +20,7 @@ export const services: ServiceConfig[] = [
   {
     name: "identity-service",
     baseUrl: process.env.IDENTITY_SERVICE_URL || "http://localhost:8081",
-    prefixes: ["/auth", "/customers", "/admin"],
+    prefixes: ["/auth", "/customers", "/admin/users"],
     publicPaths: [
       /^\/auth\/register/,
       /^\/auth\/login/,
@@ -31,6 +31,22 @@ export const services: ServiceConfig[] = [
       /^\/auth\/verify-email/,
     ],
     roleGuards: [
+      { path: /^\/admin\/users/, roles: ["admin"] },
+    ],
+  },
+  {
+    name: "provider-service",
+    baseUrl: process.env.PROVIDER_SERVICE_URL || "http://localhost:8082",
+    prefixes: ["/providers", "/search", "/matching", "/bookings", "/reviews", "/services", "/admin/providers", "/admin/services", "/admin/reviews", "/admin/audit-log"],
+    publicPaths: [
+      /^\/providers\/[a-f0-9-]+$/,
+      /^\/search\//,
+      /^\/services\/categories/,
+      /^\/services\/[a-z0-9-]+$/,
+      /^\/services$/,
+    ],
+    roleGuards: [
+      { path: /^\/providers\/me/, roles: ["provider"] },
       { path: /^\/admin\//, roles: ["admin"] },
     ],
   },

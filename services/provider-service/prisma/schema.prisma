@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -10,4 +5,157 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum ProviderStatus {
+  pending_review
+  active
+  suspended
+  deactivated
+}
+
+enum ReviewStatus {
+  visible
+  flagged
+  removed
+}
+
+model ProviderProfile {
+  id                  String         @id @default(uuid())
+  userId              String         @unique
+  paystackAccountCode String?
+  bio                 String?
+  avgRating           Float          @default(0)
+  totalReviews        Int            @default(0)
+  totalJobs           Int            @default(0)
+  completionRate      Float          @default(1.0)
+  avgResponseTimeMins Int?
+  verified            Boolean        @default(false)
+  status              ProviderStatus @default(pending_review)
+  serviceAreaRadiusKm Float          @default(25)
+  lat                 Float?
+  lng                 Float?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  services     ProviderService[]
+  availability Availability[]
+  blockedSlots BlockedSlot[]
+  reviews      Review[]
+
+  @@index([userId])
+  @@index([lat, lng])
+  @@index([status])
+}
+
+model ProviderService {
+  id          String   @id @default(uuid())
+  providerId  String
+  serviceId   String
+  customPrice Float?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  service  Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, serviceId])
+  @@index([serviceId])
+}
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  iconUrl     String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  services Service[]
+
+  @@index([slug])
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  categoryId  String
+  name        String
+  slug        String   @unique
+  description String?
+  basePrice   Float
+  durationMins Int
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category         ServiceCategory   @relation(fields: [categoryId], references: [id])
+  providerServices ProviderService[]
+
+  @@index([categoryId])
+  @@index([slug])
+}
+
+model Availability {
+  id          String   @id @default(uuid())
+  providerId  String
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  isRecurring Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, dayOfWeek])
+}
+
+model BlockedSlot {
+  id         String    @id @default(uuid())
+  providerId String
+  startAt    DateTime
+  endAt      DateTime
+  reason     String?
+  createdAt  DateTime  @default(now())
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, startAt, endAt])
+}
+
+model Review {
+  id               String       @id @default(uuid())
+  bookingId        String       @unique
+  customerId       String
+  providerId       String
+  rating           Int
+  comment          String?
+  photoUrls        String[]
+  status           ReviewStatus @default(visible)
+  providerResponse String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id])
+
+  @@index([providerId, status])
+  @@index([customerId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }
