@@ -16,4 +16,22 @@ export interface ServiceConfig {
   roleGuards: RoleGuard[];
 }
 
-export const services: ServiceConfig[] = [];
+export const services: ServiceConfig[] = [
+  {
+    name: "identity-service",
+    baseUrl: process.env.IDENTITY_SERVICE_URL || "http://localhost:8081",
+    prefixes: ["/auth", "/customers", "/admin"],
+    publicPaths: [
+      /^\/auth\/register/,
+      /^\/auth\/login/,
+      /^\/auth\/refresh/,
+      /^\/auth\/social/,
+      /^\/auth\/forgot-password/,
+      /^\/auth\/reset-password/,
+      /^\/auth\/verify-email/,
+    ],
+    roleGuards: [
+      { path: /^\/admin\//, roles: ["admin"] },
+    ],
+  },
+];

@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -10,4 +5,93 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  customer
+  provider
+  admin
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  phone         String?   @unique
+  passwordHash  String?
+  role          UserRole  @default(customer)
+  firstName     String
+  lastName      String
+  avatarUrl     String?
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  googleId      String?   @unique
+  appleId       String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  addresses         Address[]
+  favorites         FavoriteProvider[]
+  refreshTokens     RefreshToken[]
+  notificationPrefs UserNotificationPreferences?
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  userId     String
+  label      String
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  postalCode String
+  country    String   @default("US")
+  lat        Float?
+  lng        Float?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model FavoriteProvider {
+  id         String   @id @default(uuid())
+  customerId String
+  providerId String
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, providerId])
+}
+
+model UserNotificationPreferences {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  bookingConfirmedPush  Boolean @default(true)
+  bookingConfirmedEmail Boolean @default(true)
+  bookingReminderPush   Boolean @default(true)
+  bookingReminderSms    Boolean @default(true)
+  reviewPush            Boolean @default(true)
+  paymentReceivedEmail  Boolean @default(true)
+  marketingPush         Boolean @default(false)
+  marketingEmail        Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
