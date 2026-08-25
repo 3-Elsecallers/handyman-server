@@ -1,18 +1,24 @@
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler.middleware";
 import { publishEvent } from "../utils/kafka";
+import { generateDownloadUrl } from "../config/s3";
 
 export const getVerificationQueue = async (page = 1, limit = 20) => {
   const skip = (page - 1) * limit;
 
   const [providers, total] = await Promise.all([
     prisma.providerProfile.findMany({
-      where: { status: "pending_review" },
+      where: { verificationStatus: "pending_review" },
       orderBy: { createdAt: "asc" },
       skip,
       take: limit,
+      include: {
+        providerDocuments: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
     }),
-    prisma.providerProfile.count({ where: { status: "pending_review" } }),
+    prisma.providerProfile.count({ where: { verificationStatus: "pending_review" } }),
   ]);
 
   return { providers, total, page, limit, totalPages: Math.ceil(total / limit) };
@@ -22,17 +28,36 @@ export const verifyProvider = async (
   providerId: string,
   approved: boolean,
   adminId: string,
+  rejectionNote?: string,
 ) => {
   const profile = await prisma.providerProfile.findUnique({ where: { id: providerId } });
   if (!profile) throw new AppError(404, "Provider not found");
+
+  if (!approved && !rejectionNote?.trim()) {
+    throw new AppError(400, "Rejection reason is required when rejecting a provider");
+  }
 
   const updated = await prisma.providerProfile.update({
     where: { id: providerId },
     data: {
       verified: approved,
       status: approved ? "active" : "suspended",
+      verificationStatus: approved ? "approved" : "rejected",
+      rejectionNote: approved ? null : rejectionNote?.trim() || null,
     },
   });
+
+  if (approved) {
+    await prisma.providerDocument.updateMany({
+      where: { providerId, status: "pending_review" },
+      data: { status: "approved" },
+    });
+  } else {
+    await prisma.providerDocument.updateMany({
+      where: { providerId, status: "pending_review" },
+      data: { status: "rejected", rejectionReason: rejectionNote?.trim() || null },
+    });
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -40,6 +65,7 @@ export const verifyProvider = async (
       action: approved ? "provider_verified" : "provider_rejected",
       targetType: "provider",
       targetId: providerId,
+      metadata: approved ? undefined : { rejectionNote: rejectionNote?.trim() },
     },
   });
 
@@ -48,9 +74,38 @@ export const verifyProvider = async (
       providerId,
       adminId,
     });
+  } else {
+    await publishEvent("provider.rejected", providerId, {
+      providerId,
+      adminId,
+      rejectionNote: rejectionNote?.trim(),
+    });
   }
 
   return updated;
+};
+
+export const getProviderDocuments = async (providerId: string) => {
+  const profile = await prisma.providerProfile.findUnique({
+    where: { id: providerId },
+    include: {
+      providerDocuments: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!profile) throw new AppError(404, "Provider not found");
+  return profile;
+};
+
+export const getDocumentDownloadUrl = async (documentId: string) => {
+  const doc = await prisma.providerDocument.findUnique({
+    where: { id: documentId },
+  });
+  if (!doc) throw new AppError(404, "Document not found");
+
+  const url = await generateDownloadUrl(doc.s3Key);
+  return { url, document: doc };
 };
 
 export const createCategory = async (

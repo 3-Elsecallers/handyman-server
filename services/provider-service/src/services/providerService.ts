@@ -1,7 +1,19 @@
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler.middleware";
 import { publishEvent } from "../utils/kafka";
-import type { UpdateProfileInput, AddServiceInput } from "../validation/providerValidation";
+import {
+  buildS3Key,
+  generateUploadUrl,
+  generateDownloadUrl,
+  assertObjectExists,
+  extFromMime,
+  validateFileType,
+} from "../config/s3";
+import type {
+  UpdateProfileInput,
+  AddServiceInput,
+  RequestUploadUrlsInput,
+} from "../validation/providerValidation";
 
 export const getOrCreateProfile = async (userId: string) => {
   let profile = await prisma.providerProfile.findUnique({ where: { userId } });
@@ -153,4 +165,129 @@ export const getProviderServices = async (providerId: string) => {
     where: { providerId, isActive: true },
     include: { service: true },
   });
+};
+
+export const requestDocumentUploadUrls = async (
+  userId: string,
+  input: RequestUploadUrlsInput,
+) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { userId } });
+  if (!profile) throw new AppError(404, "Provider profile not found");
+
+  const selfieCount = input.files.filter((f) => f.category === "selfie").length;
+  if (selfieCount > 1) {
+    throw new AppError(400, "Only one selfie is allowed");
+  }
+
+  const ghanaCards = input.files.filter((f) => f.category === "ghana_card");
+  if (ghanaCards.length > 5) {
+    throw new AppError(400, "Maximum 5 Ghana Card images allowed");
+  }
+
+  const results: Array<{
+    id: string;
+    uploadUrl: string;
+    s3Key: string;
+    category: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+  }> = [];
+
+  for (const file of input.files) {
+    validateFileType(file.mimeType);
+    const ext = extFromMime(file.mimeType);
+    const s3Key = buildS3Key(profile.id, file.category, ext);
+    const uploadUrl = await generateUploadUrl(s3Key, file.mimeType);
+
+    const doc = await prisma.providerDocument.create({
+      data: {
+        providerId: profile.id,
+        category: file.category,
+        s3Key,
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        mimeType: file.mimeType,
+        status: "uploaded",
+      },
+    });
+
+    results.push({
+      id: doc.id,
+      uploadUrl,
+      s3Key,
+      category: file.category,
+      fileName: file.fileName,
+      fileSize: file.fileSize,
+      mimeType: file.mimeType,
+    });
+  }
+
+  return results;
+};
+
+export const confirmDocumentUploads = async (
+  userId: string,
+  documentIds: string[],
+) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { userId } });
+  if (!profile) throw new AppError(404, "Provider profile not found");
+
+  const docs = await prisma.providerDocument.findMany({
+    where: {
+      id: { in: documentIds },
+      providerId: profile.id,
+    },
+  });
+
+  if (docs.length !== documentIds.length) {
+    throw new AppError(400, "One or more document IDs are invalid");
+  }
+
+  for (const doc of docs) {
+    await assertObjectExists(doc.s3Key);
+  }
+
+  await prisma.providerDocument.updateMany({
+    where: { id: { in: documentIds } },
+    data: { status: "pending_review" },
+  });
+
+  await prisma.providerProfile.update({
+    where: { id: profile.id },
+    data: { verificationStatus: "pending_review" },
+  });
+
+  await publishEvent("provider.documents.submitted", profile.id, {
+    providerId: profile.id,
+    documentIds,
+  });
+
+  return { message: "Documents submitted for review" };
+};
+
+export const getMyDocuments = async (userId: string) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { userId } });
+  if (!profile) throw new AppError(404, "Provider profile not found");
+
+  return prisma.providerDocument.findMany({
+    where: { providerId: profile.id },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const getDocumentDownloadUrl = async (
+  userId: string,
+  documentId: string,
+) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { userId } });
+  if (!profile) throw new AppError(404, "Provider profile not found");
+
+  const doc = await prisma.providerDocument.findFirst({
+    where: { id: documentId, providerId: profile.id },
+  });
+  if (!doc) throw new AppError(404, "Document not found");
+
+  const url = await generateDownloadUrl(doc.s3Key);
+  return { url, document: doc };
 };

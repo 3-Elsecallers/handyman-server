@@ -23,3 +23,31 @@ export const uploadDocumentsSchema = z.object({
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type AddServiceInput = z.infer<typeof addServiceSchema>;
+
+export const requestUploadUrlsSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        fileName: z.string().min(1).max(255),
+        fileSize: z.number().int().min(1).max(5 * 1024 * 1024),
+        mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+        category: z.enum(["selfie", "ghana_card", "additional"]),
+      }),
+    )
+    .min(1)
+    .max(10),
+});
+
+export const confirmUploadsSchema = z.object({
+  documents: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+      }),
+    )
+    .min(1)
+    .max(10),
+});
+
+export type RequestUploadUrlsInput = z.infer<typeof requestUploadUrlsSchema>;
+export type ConfirmUploadsInput = z.infer<typeof confirmUploadsSchema>;

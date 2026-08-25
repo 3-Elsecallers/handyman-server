@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler.middleware";
 import { hashPassword, verifyPassword } from "../utils/password";
@@ -7,6 +8,16 @@ import {
 } from "../utils/token";
 import { publishEvent } from "../utils/kafka";
 import type { RegisterInput, LoginInput } from "../validation/authValidation";
+
+const EMAIL_VERIFICATION_EXPIRY_HOURS = 24;
+
+const createEmailVerificationToken = () => {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(
+    Date.now() + EMAIL_VERIFICATION_EXPIRY_HOURS * 60 * 60 * 1000,
+  );
+  return { emailVerificationToken: token, emailVerificationExpires: expiresAt };
+};
 
 export const register = async (input: RegisterInput) => {
   const existing = await prisma.user.findUnique({
@@ -26,8 +37,15 @@ export const register = async (input: RegisterInput) => {
       lastName: input.lastName,
       phone: input.phone,
       role: input.role,
+      ...createEmailVerificationToken(),
     },
   });
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      `[Identity] Email verification for ${user.email}: /auth/verify-email?token=${user.emailVerificationToken}`,
+    );
+  }
 
   await publishEvent("identity.user.registered", user.id, {
     userId: user.id,
@@ -52,6 +70,10 @@ export const login = async (input: LoginInput) => {
   const valid = await verifyPassword(user.passwordHash, input.password);
   if (!valid) {
     throw new AppError(401, "Invalid email or password");
+  }
+
+  if (!user.emailVerified && user.role !== "admin") {
+    throw new AppError(403, "Please verify your email address before signing in");
   }
 
   return generateTokenPair(user.id, user.email, user.firstName, user.role);
@@ -87,6 +109,55 @@ export const logout = async (userId: string, refreshToken?: string) => {
 
 export const logoutAll = async (userId: string) => {
   await prisma.refreshToken.deleteMany({ where: { userId } });
+};
+
+export const verifyEmail = async (token: string) => {
+  const user = await prisma.user.findUnique({
+    where: { emailVerificationToken: token },
+  });
+
+  if (
+    !user ||
+    !user.emailVerificationExpires ||
+    user.emailVerificationExpires < new Date()
+  ) {
+    throw new AppError(400, "Invalid or expired verification token");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationExpires: null,
+    },
+  });
+
+  return { message: "Email verified successfully" };
+};
+
+export const resendVerificationEmail = async (userId: string) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new AppError(404, "User not found");
+  }
+
+  if (user.emailVerified) {
+    throw new AppError(400, "Email already verified");
+  }
+
+  const { emailVerificationToken } = await prisma.user.update({
+    where: { id: user.id },
+    data: createEmailVerificationToken(),
+  });
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      `[Identity] Email verification for ${user.email}: /auth/verify-email?token=${emailVerificationToken}`,
+    );
+  }
+
+  return { message: "Verification email sent" };
 };
 
 const generateTokenPair = async (

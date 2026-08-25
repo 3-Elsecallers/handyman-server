@@ -37,7 +37,7 @@ export const services: ServiceConfig[] = [
   {
     name: "provider-service",
     baseUrl: process.env.PROVIDER_SERVICE_URL || "http://localhost:8082",
-    prefixes: ["/providers", "/search", "/matching", "/bookings", "/reviews", "/services", "/admin/providers", "/admin/services", "/admin/reviews", "/admin/audit-log"],
+    prefixes: ["/providers", "/search", "/matching", "/bookings", "/reviews", "/services", "/admin/providers", "/admin/services", "/admin/reviews", "/admin/audit-log", "/admin/documents"],
     publicPaths: [
       /^\/providers\/[a-f0-9-]+$/,
       /^\/search\//,
@@ -49,5 +49,12 @@ export const services: ServiceConfig[] = [
       { path: /^\/providers\/me/, roles: ["provider"] },
       { path: /^\/admin\//, roles: ["admin"] },
     ],
+  },
+  {
+    name: "communication-service",
+    baseUrl: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:8085",
+    prefixes: ["/conversations", "/notifications"],
+    publicPaths: [],
+    roleGuards: [],
   },
 ];

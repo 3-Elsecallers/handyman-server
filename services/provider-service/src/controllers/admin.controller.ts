@@ -16,7 +16,7 @@ export const getVerificationQueue = async (req: Request, res: Response, next: Ne
 
 export const verifyProvider = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { approved } = req.body;
+    const { approved, rejectionNote } = req.body;
     if (typeof approved !== "boolean") {
       return res.status(400).json({ success: false, message: "approved boolean required" });
     }
@@ -24,6 +24,7 @@ export const verifyProvider = async (req: Request, res: Response, next: NextFunc
       req.params.id as string,
       approved,
       req.user!.id,
+      rejectionNote,
     );
     res.json({ success: true, data: result });
   } catch (error) {
@@ -104,6 +105,24 @@ export const getAuditLog = async (req: Request, res: Response, next: NextFunctio
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const result = await adminService.getAuditLog(page, limit);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProviderDocuments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminService.getProviderDocuments(req.params.id as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDocumentDownloadUrl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminService.getDocumentDownloadUrl(req.params.documentId as string);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

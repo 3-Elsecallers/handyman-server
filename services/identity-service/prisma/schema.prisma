@@ -24,6 +24,8 @@ model User {
   avatarUrl     String?
   emailVerified Boolean   @default(false)
   phoneVerified Boolean   @default(false)
+  emailVerificationToken    String?   @unique
+  emailVerificationExpires  DateTime?
   googleId      String?   @unique
   appleId       String?   @unique
   createdAt     DateTime  @default(now())

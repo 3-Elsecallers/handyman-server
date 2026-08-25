@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { ZodError } from "zod";
 
 export class AppError extends Error {
   constructor(
@@ -15,17 +16,22 @@ export const sendError = (res: Response, status: number, message: string) => {
 };
 
 export const errorHandler = (
-  err: { statusCode?: number; message?: string },
+  err: unknown,
   _req: Request,
   res: Response,
   _next: NextFunction,
 ) => {
-  if (err instanceof AppError) {
-    return sendError(res, err.statusCode, err.message);
+  if (err instanceof ZodError) {
+    return sendError(res, 400, err.issues[0]?.message || "Invalid request");
   }
 
-  if (err.statusCode) {
-    return sendError(res, err.statusCode, err.message || "Identity service error");
+  const { statusCode, message } = (err ?? {}) as {
+    statusCode?: number;
+    message?: string;
+  };
+
+  if (statusCode) {
+    return sendError(res, statusCode, message || "Identity service error");
   }
 
   console.error("[Identity] Unhandled error:", err);

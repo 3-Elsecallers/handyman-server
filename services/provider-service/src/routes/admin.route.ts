@@ -9,6 +9,8 @@ router.use(requireRole("admin"));
 
 router.get("/providers/verify", adminController.getVerificationQueue);
 router.put("/providers/:id/verify", adminController.verifyProvider);
+router.get("/providers/:id/documents", adminController.getProviderDocuments);
+router.get("/documents/:documentId/download-url", adminController.getDocumentDownloadUrl);
 router.post("/services/categories", adminController.createCategory);
 router.put("/services/categories/:id", adminController.updateCategory);
 router.post("/services", adminController.createService);

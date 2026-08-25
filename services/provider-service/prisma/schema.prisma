@@ -14,6 +14,26 @@ enum ProviderStatus {
   deactivated
 }
 
+enum DocumentCategory {
+  selfie
+  ghana_card
+  additional
+}
+
+enum DocumentStatus {
+  uploaded
+  pending_review
+  approved
+  rejected
+}
+
+enum VerificationStatus {
+  not_submitted
+  pending_review
+  approved
+  rejected
+}
+
 enum ReviewStatus {
   visible
   flagged
@@ -35,13 +55,16 @@ model ProviderProfile {
   serviceAreaRadiusKm Float          @default(25)
   lat                 Float?
   lng                 Float?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  verificationStatus  VerificationStatus @default(not_submitted)
+  rejectionNote       String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
-  services     ProviderService[]
-  availability Availability[]
-  blockedSlots BlockedSlot[]
-  reviews      Review[]
+  services             ProviderService[]
+  availability         Availability[]
+  blockedSlots         BlockedSlot[]
+  reviews              Review[]
+  providerDocuments    ProviderDocument[]
 
   @@index([userId])
   @@index([lat, lng])
@@ -144,6 +167,25 @@ model Review {
 
   @@index([providerId, status])
   @@index([customerId])
+}
+
+model ProviderDocument {
+  id               String           @id @default(uuid())
+  providerId       String
+  category         DocumentCategory
+  s3Key            String
+  fileName         String
+  fileSize         Int
+  mimeType         String
+  status           DocumentStatus   @default(uploaded)
+  rejectionReason  String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, category])
+  @@index([providerId, status])
 }
 
 model AuditLog {

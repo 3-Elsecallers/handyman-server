@@ -1,6 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import * as providerService from "../services/providerService";
-import { updateProfileSchema, addServiceSchema, updateServiceSchema } from "../validation/providerValidation";
+import {
+  updateProfileSchema,
+  addServiceSchema,
+  updateServiceSchema,
+  requestUploadUrlsSchema,
+  confirmUploadsSchema,
+} from "../validation/providerValidation";
 
 export const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -79,6 +85,47 @@ export const uploadDocuments = async (req: Request, res: Response, next: NextFun
       return res.status(400).json({ success: false, message: "documentUrls array required" });
     }
     res.json({ success: true, data: { message: "Documents uploaded", urls: documentUrls } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const requestUploadUrls = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = requestUploadUrlsSchema.parse(req.body);
+    const result = await providerService.requestDocumentUploadUrls(req.user!.id, input);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmUploads = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = confirmUploadsSchema.parse(req.body);
+    const result = await providerService.confirmDocumentUploads(req.user!.id, input.documents.map((d) => d.id));
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyDocuments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const docs = await providerService.getMyDocuments(req.user!.id);
+    res.json({ success: true, data: docs });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDocumentDownloadUrl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await providerService.getDocumentDownloadUrl(
+      req.user!.id,
+      req.params.documentId as string,
+    );
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
