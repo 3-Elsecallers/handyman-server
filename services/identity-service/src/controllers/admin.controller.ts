@@ -8,6 +8,7 @@ export const listUsers = async (req: Request, res: Response, next: NextFunction)
       limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
       search: req.query.search as string | undefined,
       role: req.query.role as string | undefined,
+      status: req.query.status as string | undefined,
     });
     res.json({ success: true, data: result });
   } catch (error) {
@@ -38,6 +39,29 @@ export const updateUserStatus = async (req: Request, res: Response, next: NextFu
       action,
       req.user!.id,
     );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminService.deleteUser(
+      req.params.id as string,
+      req.user!.id,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAuditLog = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const result = await adminService.getAuditLog(page, limit);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

@@ -66,9 +66,18 @@ export async function generateDownloadUrl(key: string): Promise<string> {
   return getSignedUrl(s3, command, { expiresIn: 3600 });
 }
 
-export async function assertObjectExists(key: string): Promise<void> {
+export async function getDocumentStream(key: string) {
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+  });
+  return s3.send(command);
+}
+
+export async function getObjectContentLength(key: string): Promise<number> {
   try {
-    await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+    const res = await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+    return res.ContentLength ?? 0;
   } catch {
     throw new AppError(400, "File not found in storage. Please upload before confirming.");
   }

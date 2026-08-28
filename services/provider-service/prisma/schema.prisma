@@ -41,18 +41,18 @@ enum ReviewStatus {
 }
 
 model ProviderProfile {
-  id                  String         @id @default(uuid())
-  userId              String         @unique
+  id                  String             @id @default(uuid())
+  userId              String             @unique
   paystackAccountCode String?
   bio                 String?
-  avgRating           Float          @default(0)
-  totalReviews        Int            @default(0)
-  totalJobs           Int            @default(0)
-  completionRate      Float          @default(1.0)
+  avgRating           Float              @default(0)
+  totalReviews        Int                @default(0)
+  totalJobs           Int                @default(0)
+  completionRate      Float              @default(1.0)
   avgResponseTimeMins Int?
-  verified            Boolean        @default(false)
-  status              ProviderStatus @default(pending_review)
-  serviceAreaRadiusKm Float          @default(25)
+  verified            Boolean            @default(false)
+  status              ProviderStatus     @default(pending_review)
+  serviceAreaRadiusKm Float              @default(25)
   lat                 Float?
   lng                 Float?
   verificationStatus  VerificationStatus @default(not_submitted)
@@ -60,11 +60,11 @@ model ProviderProfile {
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
-  services             ProviderService[]
-  availability         Availability[]
-  blockedSlots         BlockedSlot[]
-  reviews              Review[]
-  providerDocuments    ProviderDocument[]
+  services          ProviderService[]
+  availability      Availability[]
+  blockedSlots      BlockedSlot[]
+  reviews           Review[]
+  providerDocuments ProviderDocument[]
 
   @@index([userId])
   @@index([lat, lng])
@@ -102,18 +102,18 @@ model ServiceCategory {
 }
 
 model Service {
-  id          String   @id @default(uuid())
-  categoryId  String
-  name        String
-  slug        String   @unique
-  description String?
-  basePrice   Float
+  id           String   @id @default(uuid())
+  categoryId   String
+  name         String
+  slug         String   @unique
+  description  String?
+  basePrice    Float
   durationMins Int
-  imageUrl    String?
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  imageUrl     String?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   category         ServiceCategory   @relation(fields: [categoryId], references: [id])
   providerServices ProviderService[]
@@ -138,12 +138,12 @@ model Availability {
 }
 
 model BlockedSlot {
-  id         String    @id @default(uuid())
+  id         String   @id @default(uuid())
   providerId String
   startAt    DateTime
   endAt      DateTime
   reason     String?
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime @default(now())
 
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
@@ -170,17 +170,17 @@ model Review {
 }
 
 model ProviderDocument {
-  id               String           @id @default(uuid())
-  providerId       String
-  category         DocumentCategory
-  s3Key            String
-  fileName         String
-  fileSize         Int
-  mimeType         String
-  status           DocumentStatus   @default(uploaded)
-  rejectionReason  String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id              String           @id @default(uuid())
+  providerId      String
+  category        DocumentCategory
+  s3Key           String
+  fileName        String
+  fileSize        Int
+  mimeType        String
+  status          DocumentStatus   @default(uploaded)
+  rejectionReason String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
 

@@ -10,5 +10,7 @@ router.use(requireRole("admin"));
 router.get("/users", adminController.listUsers);
 router.get("/users/:id", adminController.getUserDetail);
 router.put("/users/:id/status", adminController.updateUserStatus);
+router.delete("/users/:id", adminController.deleteUser);
+router.get("/audit-log", adminController.getAuditLog);
 
 export default router;

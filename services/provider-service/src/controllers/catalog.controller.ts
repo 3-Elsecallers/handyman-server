@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import * as catalogService from "../services/catalogService";
 
-export const listCategories = async (_req: Request, res: Response, next: NextFunction) => {
+export const listCategories = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const categories = await catalogService.listCategories();
+    const categories = await catalogService.listCategories(
+      req.query.includeInactive === "true",
+    );
     res.json({ success: true, data: categories });
   } catch (error) {
     next(error);
@@ -12,7 +14,11 @@ export const listCategories = async (_req: Request, res: Response, next: NextFun
 
 export const listServices = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const services = await catalogService.listServices(req.query.categoryId as string | undefined);
+    const services = await catalogService.listServices(
+      req.query.categoryId as string | undefined,
+      req.query.search as string | undefined,
+      req.query.includeInactive === "true",
+    );
     res.json({ success: true, data: services });
   } catch (error) {
     next(error);

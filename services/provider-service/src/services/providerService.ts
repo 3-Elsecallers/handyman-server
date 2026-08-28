@@ -5,7 +5,8 @@ import {
   buildS3Key,
   generateUploadUrl,
   generateDownloadUrl,
-  assertObjectExists,
+  getObjectContentLength,
+  getDocumentStream,
   extFromMime,
   validateFileType,
 } from "../config/s3";
@@ -245,7 +246,13 @@ export const confirmDocumentUploads = async (
   }
 
   for (const doc of docs) {
-    await assertObjectExists(doc.s3Key);
+    const storedSize = await getObjectContentLength(doc.s3Key);
+    if (storedSize === 0) {
+      throw new AppError(
+        400,
+        `File "${doc.fileName}" is empty in storage. Please upload the file again.`,
+      );
+    }
   }
 
   await prisma.providerDocument.updateMany({
@@ -290,4 +297,27 @@ export const getDocumentDownloadUrl = async (
 
   const url = await generateDownloadUrl(doc.s3Key);
   return { url, document: doc };
+};
+
+const TEST_IMAGE_EXT = "png";
+
+export const getTestUploadUrl = async (userId: string) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { userId } });
+  if (!profile) throw new AppError(404, "Provider profile not found");
+
+  const key = `test-uploads/${profile.id}/image.${TEST_IMAGE_EXT}`;
+  const uploadUrl = await generateUploadUrl(key, "image/"+TEST_IMAGE_EXT);
+  return { uploadUrl, s3Key: key };
+};
+
+export const streamTestImage = async (userId: string) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { userId } });
+  if (!profile) throw new AppError(404, "Provider profile not found");
+
+  const key = `test-uploads/${profile.id}/image.${TEST_IMAGE_EXT}`;
+  try {
+    return { result: await getDocumentStream(key) };
+  } catch {
+    throw new AppError(404, "No uploaded image found. Please upload one first.");
+  }
 };

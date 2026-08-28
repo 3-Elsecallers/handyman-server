@@ -3,6 +3,7 @@ import "dotenv/config";
 export const config = {
   port: parseInt(process.env.PORT || "8085", 10),
   serviceToken: process.env.SERVICE_TOKEN || "communication-service-internal-token",
+  internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || "handyman-internal-service-token",
   identityServiceUrl: process.env.IDENTITY_SERVICE_URL || "http://localhost:8081",
   bookingServiceUrl: process.env.BOOKING_SERVICE_URL || "http://localhost:8083",
   kafka: {

@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -10,4 +5,135 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  in_progress
+  completed
+  cancelled
+  disputed
+}
+
+enum BookingType {
+  instant
+  request
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  declined
+  expired
+}
+
+model Booking {
+  id                String       @id @default(uuid())
+  customerId        String
+  providerId        String?
+  providerUserId    String?
+  serviceId         String
+  type              BookingType  @default(instant)
+  status            BookingStatus @default(pending)
+  scheduledAt       DateTime
+  scheduledWindowEnd DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  cancellationReason String?
+  refundAmount      Float        @default(0)
+  locationLine1     String
+  locationLine2     String?
+  locationCity      String
+  locationState     String
+  locationPostal    String
+  locationLat       Float
+  locationLng       Float
+  priceQuote        Float
+  basePrice         Float
+  complexity        String       @default("standard")
+  complexityMultiplier Float    @default(1.0)
+  travelFee         Float        @default(0)
+  surgeAmount       Float        @default(0)
+  promoCodeId       String?
+  promoDiscount     Float        @default(0)
+  notes             String?
+  description       String?
+  durationMins      Int?
+  reassignCount     Int         @default(0)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  promoCode PromoCode?     @relation(fields: [promoCodeId], references: [id])
+  timeline  BookingTimeline[]
+  invites   BookingInvite[]
+
+  @@index([customerId, status])
+  @@index([providerId, status])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([promoCodeId])
+}
+
+model BookingInvite {
+  id             String       @id @default(uuid())
+  bookingId      String
+  providerId     String
+  providerUserId String
+  status         InviteStatus @default(pending)
+  invitedAt      DateTime     @default(now())
+  respondedAt    DateTime?
+  expiresAt      DateTime
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([providerId, status])
+}
+
+model BookingTimeline {
+  id        String       @id @default(uuid())
+  bookingId String
+  status    BookingStatus
+  actorId   String?
+  actorRole String?
+  note      String?
+  createdAt DateTime     @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([createdAt])
+}
+
+model PromoCode {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  description String?
+  discountPct Float?
+  discountAmt Float?
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  usages  PromoUsage[]
+  bookings Booking[]
+
+  @@index([code])
+}
+
+model PromoUsage {
+  id          String    @id @default(uuid())
+  promoCodeId String
+  userId      String
+  bookingId   String?
+  createdAt   DateTime  @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+
+  @@index([promoCodeId])
+  @@index([userId])
 }

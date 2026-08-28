@@ -7,6 +7,7 @@ export const listUsers = async (query: {
   limit?: number;
   search?: string;
   role?: string;
+  status?: string;
 }) => {
   const page = query.page || 1;
   const limit = Math.min(query.limit || 20, 100);
@@ -18,11 +19,16 @@ export const listUsers = async (query: {
     where.role = query.role;
   }
 
+  if (query.status) {
+    where.status = query.status;
+  }
+
   if (query.search) {
     where.OR = [
       { email: { contains: query.search, mode: "insensitive" } },
       { firstName: { contains: query.search, mode: "insensitive" } },
       { lastName: { contains: query.search, mode: "insensitive" } },
+      { phone: { contains: query.search, mode: "insensitive" } },
     ];
   }
 
@@ -38,6 +44,7 @@ export const listUsers = async (query: {
         firstName: true,
         lastName: true,
         role: true,
+        status: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -59,6 +66,7 @@ export const getUserDetail = async (userId: string) => {
       lastName: true,
       avatarUrl: true,
       role: true,
+      status: true,
       emailVerified: true,
       phoneVerified: true,
       createdAt: true,
@@ -78,6 +86,23 @@ export const updateUserStatus = async (
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AppError(404, "User not found");
 
+  const newStatus = action === "suspend" ? "suspended" : "active";
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { status: newStatus as "active" | "suspended" },
+    select: { id: true, status: true, updatedAt: true },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: action === "suspend" ? "user_suspended" : "user_activated",
+      targetType: "user",
+      targetId: userId,
+    },
+  });
+
   if (action === "suspend") {
     await publishEvent("identity.user.suspended", userId, {
       userId,
@@ -86,5 +111,48 @@ export const updateUserStatus = async (
     });
   }
 
-  return { userId, action, updatedAt: new Date() };
+  return updated;
+};
+
+export const deleteUser = async (userId: string, adminId: string) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User not found");
+
+  if (user.role === "admin") {
+    throw new AppError(400, "Admin users cannot be deleted");
+  }
+
+  await prisma.user.delete({ where: { id: userId } });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: "user_deleted",
+      targetType: "user",
+      targetId: userId,
+      metadata: { email: user.email, role: user.role },
+    },
+  });
+
+  await publishEvent("identity.user.deleted", userId, {
+    userId,
+    adminId,
+  });
+
+  return { userId, deletedAt: new Date() };
+};
+
+export const getAuditLog = async (page = 1, limit = 50) => {
+  const skip = (page - 1) * limit;
+
+  const [logs, total] = await Promise.all([
+    prisma.auditLog.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.auditLog.count(),
+  ]);
+
+  return { logs, total, page, limit, totalPages: Math.ceil(total / limit) };
 };

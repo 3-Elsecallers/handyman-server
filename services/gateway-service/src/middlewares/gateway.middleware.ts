@@ -5,10 +5,16 @@ import { authenticate } from "./authenticate.middleware";
 import { authorize } from "./authorize.middleware";
 import { proxyTo } from "./proxy.middleware";
 
-const isServicePath = (service: ServiceConfig, path: string) =>
-  service.prefixes.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+const isServicePath = (service: ServiceConfig, path: string) => {
+  const excluded =
+    service.excludePaths?.some((regex) => regex.test(path)) ?? false;
+  return (
+    !excluded &&
+    service.prefixes.some(
+      (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+    )
   );
+};
 
 const isPublicPath = (service: ServiceConfig, path: string) =>
   service.publicPaths.some((regex) => regex.test(path));

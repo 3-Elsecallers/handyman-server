@@ -6,6 +6,7 @@ const router = Router();
 
 router.use(serviceAuth);
 
+router.post("/providers/match", internalController.matchProviders);
 router.get("/providers/:id", internalController.getProviderById);
 router.get("/providers/:id/services", internalController.getProviderServices);
 router.post("/providers/:id/availability/validate", internalController.validateAvailability);

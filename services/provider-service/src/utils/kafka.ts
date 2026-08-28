@@ -42,9 +42,11 @@ export const createConsumer = async (
       brokers: config.kafka.brokers,
     });
 
-    const consumer = kafka.consumer({ groupId: config.kafka.groupId });
+    const consumer = kafka.consumer({
+      groupId: `${config.kafka.groupId}-${topic}`,
+    });
     await consumer.connect();
-    await consumer.subscribe({ topic, fromBeginning: false });
+    await consumer.subscribe({ topic, fromBeginning: true });
 
     await consumer.run({
       eachMessage: async ({ message }) => {

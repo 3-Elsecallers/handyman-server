@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import * as providerService from "../services/providerService";
 import * as catalogService from "../services/catalogService";
 import * as availabilityService from "../services/availabilityService";
+import * as matchingService from "../services/matchingService";
 import { validateAvailabilitySchema, matchProvidersSchema } from "../validation/searchValidation";
 
 export const getProviderById = async (req: Request, res: Response, next: NextFunction) => {
@@ -49,6 +50,16 @@ export const listCategories = async (_req: Request, res: Response, next: NextFun
   try {
     const categories = await catalogService.listCategories();
     res.json({ success: true, data: categories });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const matchProviders = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = matchProvidersSchema.parse(req.body);
+    const matches = await matchingService.findMatchingProviders(input);
+    res.json({ success: true, data: matches });
   } catch (error) {
     next(error);
   }

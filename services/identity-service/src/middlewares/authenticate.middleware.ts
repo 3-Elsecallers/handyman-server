@@ -42,7 +42,7 @@ export const serviceAuth = (
   next: NextFunction,
 ) => {
   const token = req.headers["x-service-token"];
-  if (token !== config.serviceToken) {
+  if (token !== config.internalServiceToken) {
     return res
       .status(403)
       .json({ success: false, message: "Invalid service token" });

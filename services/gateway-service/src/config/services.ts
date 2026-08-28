@@ -12,11 +12,26 @@ export interface ServiceConfig {
   name: string;
   baseUrl: string;
   prefixes: string[];
+  excludePaths?: RegExp[];
   publicPaths: RegExp[];
   roleGuards: RoleGuard[];
 }
 
 export const services: ServiceConfig[] = [
+  {
+    name: "booking-service",
+    baseUrl: process.env.BOOKING_SERVICE_URL || "http://localhost:8083",
+    prefixes: [
+      "/bookings",
+      "/customers/bookings",
+      "/providers/me/bookings",
+      "/admin/bookings",
+      "/admin/promos",
+    ],
+    excludePaths: [/^\/bookings\/[a-f0-9-]+\/review$/],
+    publicPaths: [],
+    roleGuards: [],
+  },
   {
     name: "identity-service",
     baseUrl: process.env.IDENTITY_SERVICE_URL || "http://localhost:8081",

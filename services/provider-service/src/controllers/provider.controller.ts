@@ -130,3 +130,33 @@ export const getDocumentDownloadUrl = async (req: Request, res: Response, next: 
     next(error);
   }
 };
+
+export const getTestUploadUrl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await providerService.getTestUploadUrl(req.user!.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const streamTestImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { result } = await providerService.streamTestImage(req.user!.id);
+
+    res.setHeader("Content-Type", "image/png");
+    if (result.ContentLength !== undefined) {
+      res.setHeader("Content-Length", String(result.ContentLength));
+    }
+    res.setHeader("Cache-Control", "private, max-age=60");
+
+    const body = result.Body as unknown as NodeJS.ReadableStream | undefined;
+    if (!body) {
+      return res.status(404).json({ success: false, message: "Image not found in storage" });
+    }
+
+    (body as NodeJS.ReadableStream).pipe(res);
+  } catch (error) {
+    next(error);
+  }
+};

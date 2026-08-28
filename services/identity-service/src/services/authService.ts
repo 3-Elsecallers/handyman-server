@@ -55,7 +55,7 @@ export const register = async (input: RegisterInput) => {
     lastName: user.lastName,
   });
 
-  return generateTokenPair(user.id, user.email, user.firstName, user.role);
+  return generateTokenPair(user.id, user.email, `${user.firstName} ${user.lastName}`, user.role);
 };
 
 export const login = async (input: LoginInput) => {
@@ -76,7 +76,7 @@ export const login = async (input: LoginInput) => {
     throw new AppError(403, "Please verify your email address before signing in");
   }
 
-  return generateTokenPair(user.id, user.email, user.firstName, user.role);
+  return generateTokenPair(user.id, user.email, `${user.firstName} ${user.lastName}`, user.role);
 };
 
 export const refreshTokens = async (refreshToken: string) => {
@@ -85,18 +85,23 @@ export const refreshTokens = async (refreshToken: string) => {
     include: { user: true },
   });
 
-  if (!stored || stored.expiresAt < new Date()) {
+  if (!stored) {
     throw new AppError(401, "Invalid or expired refresh token");
   }
 
-  await prisma.refreshToken.delete({ where: { id: stored.id } });
+  if (stored.expiresAt < new Date()) {
+    await prisma.refreshToken.delete({ where: { id: stored.id } });
+    throw new AppError(401, "Invalid or expired refresh token");
+  }
 
-  return generateTokenPair(
-    stored.user.id,
-    stored.user.email,
-    stored.user.firstName,
-    stored.user.role,
-  );
+  const accessToken = generateAccessToken({
+    id: stored.user.id,
+    email: stored.user.email,
+    name: `${stored.user.firstName} ${stored.user.lastName}`,
+    role: stored.user.role,
+  });
+
+  return { accessToken } ;
 };
 
 export const logout = async (userId: string, refreshToken?: string) => {

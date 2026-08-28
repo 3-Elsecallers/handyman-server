@@ -1,6 +1,18 @@
 import { Request, Response, NextFunction } from "express";
 import * as addressService from "../services/addressService";
-import { createAddressSchema, updateAddressSchema } from "../validation/addressValidation";
+import { GHANA_REGIONS } from "../data/ghanaLocations";
+import {
+  createAddressSchema,
+  updateAddressSchema,
+} from "../validation/addressValidation";
+
+export const listLocations = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: GHANA_REGIONS });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const listAddresses = async (req: Request, res: Response, next: NextFunction) => {
   try {

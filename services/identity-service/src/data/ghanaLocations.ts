@@ -1,0 +1,24 @@
+export interface GhanaRegion {
+  name: string;
+  capital: string;
+  districts: string[];
+}
+
+export const GHANA_REGIONS: GhanaRegion[] = [
+  { name: "Greater Accra", capital: "Accra", districts: ["Accra Metropolitan", "Tema Metropolitan", "Ga East Municipal", "Ga West Municipal", "Ga South Municipal", "La Dade-Kotopon Municipal", "La Nkwantanang-Madina Municipal", "Adenta Municipal", "Ashaiman Municipal", "Ledzokuku Municipal", "Krowor Municipal", "Shai Osudoku", "Ningo-Prampram"] },
+  { name: "Ashanti", capital: "Kumasi", districts: ["Kumasi Metropolitan", "Asokore Mampong Municipal", "Kwabre East", "Oforikrom Municipal", "Asokwa Municipal", "Suame Municipal", "Old Tafo Municipal", "Ejisu Municipal", "Bosome Freho", "Ahafo Ano North", "Ahafo Ano South", "Bekwai Municipal", "Obuasi Municipal"] },
+  { name: "Western", capital: "Sekondi-Takoradi", districts: ["Sekondi-Takoradi Metropolitan", "Effia-Kwesimintsim Municipal", "Shama", "Ahanta West", "Nzema East Municipal", "Ellembelle", "Jomoro", "Mpohor", "Prestea-Huni Valley", "Tarkwa-Nsuaem Municipal"] },
+  { name: "Western North", capital: "Sefwi Wiawso", districts: ["Sefwi-Wiawso Municipal", "Bia West", "Bia East", "Aowin", "Suaman", "Bodi", "Juaboso", "Sefwi Akontombra"] },
+  { name: "Central", capital: "Cape Coast", districts: ["Cape Coast Metropolitan", "Komenda-Edina-Eguafo-Abirem Municipal", "Mfantsiman Municipal", "Abura-Asebu-Kwamankese", "Gomoa West", "Gomoa East", "Agona West Municipal", "Agona East", "Awutu Senya East Municipal", "Awutu Senya West", "Upper Denkyira East", "Upper Denkyira West", "Twifo Ati-Morkwa", "Assin South", "Assin North", "Ajumako-Enyan-Essiam", "Ekumfi", "Asikuma-Odoben-Brakwa", "Effutu Municipal"] },
+  { name: "Volta", capital: "Ho", districts: ["Ho Municipal", "Ho West", "Adaklu", "Agotime-Ziope", "North Tongu", "South Tongu", "Central Tongu", "Ketu North", "Ketu South Municipal", "Kpando Municipal", "Hohoe Municipal", "Kadjebi", "Jasikan", "Krachi East", "Krachi West", "Nkwanta North", "Nkwanta South", "Akatsi North", "Akatsi South", "Anloga", "Keta Municipal"] },
+  { name: "Eastern", capital: "Koforidua", districts: ["Koforidua Municipal", "New Juaben South", "Akwapim North Municipal", "Akwapim South", "Akuapem North", "Akyemansa", "Asuogyaman", "Atiwa East", "Atiwa West", "Ayensuano", "Birim Central Municipal", "Birim North", "Birim South", "Denkyembour", "Fanteakwa North", "Fanteakwa South", "Kwaebibirem Municipal", "Kwahu Afram Plains North", "Kwahu Afram Plains South", "Kwahu East", "Kwahu South", "Kwahu West Municipal", "Lower Manya Krobo Municipal", "Upper Manya Krobo", "Nsawam-Adoagyiri Municipal", "Okere", "Suhum Municipal", "Upper West Akim", "Yilo Krobo Municipal"] },
+  { name: "Bono", capital: "Sunyani", districts: ["Sunyani Municipal", "Sunyani West", "Dormaa Central Municipal", "Dormaa East", "Dormaa West", "Tain", "Berekum East", "Berekum West", "Jaman North", "Jaman South", "Wenchi Municipal", "Techiman Municipal", "Techiman North", "Nkoranza North", "Nkoranza South"] },
+  { name: "Bono East", capital: "Techiman", districts: ["Techiman Municipal", "Techiman North", "Nkoranza North", "Nkoranza South", "Atebubu-Amantin", "Sene East", "Sene West", "Kintampo North", "Kintampo South", "Pru East", "Pru West", "Nkronza West"] },
+  { name: "Ahafo", capital: "Goaso", districts: ["Asunafo North Municipal", "Asunafo South", "Asutifi North", "Asutifi South", "Tano North", "Tano South"] },
+  { name: "Northern", capital: "Tamale", districts: ["Tamale Metropolitan", "Sagnarigu Municipal", "Mion", "Tolon", "Kumbungu", "Savelugu Municipal", "Yendi Municipal", "Karaga", "Gushegu Municipal", "Nanton", "Zabzugu", "Tatale-Sangule", "Nanumba North Municipal", "Nanumba South", "Kpandai", "Saboba", "Chereponi"] },
+  { name: "Savannah", capital: "Damongo", districts: ["West Gonja Municipal", "East Gonja Municipal", "Central Gonja", "North East Gonja", "Sawla-Tuna-Kalba", "Bole", "North Gonja"] },
+  { name: "North East", capital: "Nalerigu", districts: ["East Mamprusi Municipal", "West Mamprusi Municipal", "Mamprugu-Moagduri", "Yunyoo-Nasuan", "Bunkpurugu-Nakpanduri", "Chereponi"] },
+  { name: "Upper East", capital: "Bolgatanga", districts: ["Bolgatanga Municipal", "Bawku Municipal", "Bongo", "Talensi", "Nabdam", "Kassena-Nankana Municipal", "Kassena-Nankana West", "Builsa North Municipal", "Builsa South", "Bawku West", "Garu", "Tempane", "Pusiga"] },
+  { name: "Upper West", capital: "Wa", districts: ["Wa Municipal", "Wa East", "Wa West", "Nadowli-Kaleo", "Daffiama-Bussie-Issa", "Jirapa Municipal", "Lambussie", "Lawra Municipal", "Nandom Municipal", "Sissala East Municipal", "Sissala West"] },
+  { name: "Oti", capital: "Dambai", districts: ["Jasikan", "Kadjebi", "Krachi East", "Krachi West", "Krachi Nchumuru", "Nkwanta North", "Nkwanta South", "Biakoye"] },
+];

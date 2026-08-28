@@ -7,6 +7,7 @@ export const config = {
   accessTokenExpiry: "15m",
   refreshTokenExpiryDays: 7,
   serviceToken: process.env.SERVICE_TOKEN || "identity-service-internal-token",
+  internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || "handyman-internal-service-token",
   kafka: {
     brokers: (process.env.KAFKA_BROKERS || "localhost:9092").split(","),
     clientId: "identity-service",
