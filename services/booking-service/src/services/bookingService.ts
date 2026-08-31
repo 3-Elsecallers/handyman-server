@@ -30,6 +30,7 @@ const bookingSelect = {
   serviceId: true,
   type: true,
   status: true,
+  paymentStatus: true,
   scheduledAt: true,
   scheduledWindowEnd: true,
   completedAt: true,
@@ -94,13 +95,58 @@ export const getBookingById = async (bookingId: string) => {
   return booking;
 };
 
+type BookingRow = Awaited<ReturnType<typeof getBookingById>>;
+
+/**
+ * Enriches a booking row with the service and provider objects consumed by the
+ * client `Booking` interface. Service/provider/profile and identity lookups are
+ * best-effort: if a downstream service is unavailable or a record is missing,
+ * the field is `null` rather than failing the read.
+ */
+const enrichBooking = async (booking: BookingRow) => {
+  const [serviceResult, providerProfile, user] = await Promise.allSettled([
+    fetchService(booking.serviceId),
+    booking.providerId ? fetchProvider(booking.providerId) : Promise.resolve(null),
+    booking.providerUserId ? fetchUser(booking.providerUserId) : Promise.resolve(null),
+  ]);
+
+  const service =
+    serviceResult.status === "fulfilled" && serviceResult.value
+      ? {
+          id: serviceResult.value.id,
+          name: serviceResult.value.name,
+          slug: serviceResult.value.slug,
+          basePrice: serviceResult.value.basePrice,
+        }
+      : null;
+
+  const provider =
+    providerProfile.status === "fulfilled" && providerProfile.value && booking.providerId
+      ? {
+          id: providerProfile.value.id,
+          name:
+            user.status === "fulfilled" && user.value
+              ? `${user.value.firstName ?? ""} ${user.value.lastName ?? ""}`.trim() || undefined
+              : undefined,
+          avatarUrl: user.status === "fulfilled" ? user.value?.avatarUrl ?? null : null,
+          bio: providerProfile.value.bio ?? null,
+          avgRating: providerProfile.value.avgRating,
+          totalJobs: providerProfile.value.totalJobs,
+          avgResponseTimeMins: providerProfile.value.avgResponseTimeMins ?? null,
+          verified: providerProfile.value.verified,
+        }
+      : null;
+
+  return { ...booking, service, provider };
+};
+
 export const getBookingDetail = async (
   bookingId: string,
   actingUser: { id: string; role: string },
 ) => {
   const booking = await getBookingById(bookingId);
   assertAccess(booking, actingUser);
-  return booking;
+  return enrichBooking(booking);
 };
 
 const assertAccess = (
@@ -551,6 +597,9 @@ export const startBooking = async (bookingId: string, providerId: string) => {
   if (booking.status !== "confirmed") {
     throw new AppError(409, `Cannot start a booking in status ${booking.status}`);
   }
+  if (booking.paymentStatus !== "paid") {
+    throw new AppError(402, "Booking must be paid before the service can start");
+  }
 
   const updated = await prisma.booking.update({
     where: { id: booking.id },
@@ -886,6 +935,7 @@ export const getBookingProviderInfo = async (bookingId: string, customerId: stri
     providerId: provider.id,
     name: user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : undefined,
     avatarUrl: user?.avatarUrl,
+    phone: user?.phone,
     bio: provider.bio,
     avgRating: provider.avgRating,
     totalJobs: provider.totalJobs,

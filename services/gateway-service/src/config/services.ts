@@ -72,4 +72,11 @@ export const services: ServiceConfig[] = [
     publicPaths: [],
     roleGuards: [],
   },
+  {
+    name: "payment-service",
+    baseUrl: process.env.PAYMENT_SERVICE_URL || "http://localhost:8084",
+    prefixes: ["/payments"],
+    publicPaths: [/^\/payments\/webhook/],
+    roleGuards: [],
+  },
 ];

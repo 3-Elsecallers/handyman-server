@@ -5,6 +5,7 @@ export const config = {
   serviceToken: process.env.SERVICE_TOKEN || "provider-service-internal-token",
   internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || "handyman-internal-service-token",
   identityServiceUrl: process.env.IDENTITY_SERVICE_URL || "http://localhost:8081",
+  bookingServiceUrl: process.env.BOOKING_SERVICE_URL || "http://localhost:8083",
   kafka: {
     brokers: (process.env.KAFKA_BROKERS || "localhost:9092").split(","),
     clientId: "provider-service",

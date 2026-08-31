@@ -21,6 +21,13 @@ enum BookingType {
   request
 }
 
+enum BookingPaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
 enum InviteStatus {
   pending
   accepted
@@ -36,6 +43,7 @@ model Booking {
   serviceId         String
   type              BookingType  @default(instant)
   status            BookingStatus @default(pending)
+  paymentStatus     BookingPaymentStatus @default(pending)
   scheduledAt       DateTime
   scheduledWindowEnd DateTime?
   completedAt       DateTime?

@@ -12,9 +12,9 @@ export const addressSchema = z.object({
 
 export const instantBookingSchema = z.object({
   type: z.literal("instant").optional().default("instant"),
-  serviceId: z.string().uuid(),
-  providerId: z.string().uuid(),
-  scheduledAt: z.string().datetime(),
+  serviceId: z.uuid(),
+  providerId: z.uuid(),
+  scheduledAt: z.iso.datetime(),
   complexity: z.enum(["standard", "moderate", "complex"]).default("standard"),
   promoCode: z.string().max(50).optional(),
   notes: z.string().max(2000).optional(),
@@ -23,9 +23,9 @@ export const instantBookingSchema = z.object({
 
 export const requestBookingSchema = z.object({
   type: z.literal("request"),
-  serviceId: z.string().uuid(),
-  scheduledWindowStart: z.string().datetime(),
-  scheduledWindowEnd: z.string().datetime(),
+  serviceId: z.uuid(),
+  scheduledWindowStart: z.iso.datetime(),
+  scheduledWindowEnd: z.iso.datetime(),
   complexity: z.enum(["standard", "moderate", "complex"]).default("standard"),
   description: z.string().min(1).max(4000),
   ...addressSchema.shape,
@@ -37,9 +37,9 @@ export const cancelBookingSchema = z.object({
 
 export const estimateBookingSchema = z.object({
   type: z.enum(["instant", "request"]).optional(),
-  serviceId: z.string().uuid(),
-  providerId: z.string().uuid().optional(),
-  scheduledAt: z.string().datetime().optional(),
+  serviceId: z.uuid(),
+  providerId: z.uuid().optional(),
+  scheduledAt: z.iso.datetime().optional(),
   complexity: z.enum(["standard", "moderate", "complex"]).default("standard"),
   promoCode: z.string().max(50).optional(),
   locationLat: z.number().min(-90).max(90),
@@ -59,8 +59,8 @@ export const listBookingsQuerySchema = z.object({
 export const adminListBookingsQuerySchema = z.object({
   status: z.enum(["pending", "confirmed", "in_progress", "completed", "cancelled", "disputed"]).optional(),
   search: z.string().optional(),
-  customerId: z.string().uuid().optional(),
-  providerId: z.string().uuid().optional(),
+  customerId: z.uuid().optional(),
+  providerId: z.uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });

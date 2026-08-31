@@ -25,14 +25,18 @@ interface UserSuspendedEvent {
 }
 
 export const startKafkaConsumers = async () => {
-  // Confirm payment received for a booking
+  // Confirm payment received for a booking — gate service delivery
   await createConsumer("payment.captured", async (value) => {
     const event = value as unknown as PaymentCapturedEvent;
     if (!event.bookingId) return;
+    await prisma.booking.updateMany({
+      where: { id: event.bookingId },
+      data: { paymentStatus: "paid" },
+    });
     console.log(`[Kafka] Payment captured for booking ${event.bookingId}`);
   });
 
-  // Update booking with refund status
+  // Update booking with refund status + payment state
   await createConsumer("payment.refunded", async (value) => {
     const event = value as unknown as PaymentRefundedEvent;
     if (!event.bookingId) return;
@@ -40,6 +44,7 @@ export const startKafkaConsumers = async () => {
       where: { id: event.bookingId },
       data: {
         ...(event.refundAmount != null ? { refundAmount: event.refundAmount } : {}),
+        paymentStatus: "refunded",
       },
     });
     console.log(`[Kafka] Refund recorded for booking ${event.bookingId}`);

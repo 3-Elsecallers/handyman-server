@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -10,4 +5,127 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum PaymentStatus {
+  pending
+  authorized
+  paid
+  refunded
+  partially_refunded
+  failed
+}
+
+enum PaymentType {
+  booking
+  tip
+}
+
+enum RefundStatus {
+  pending
+  processed
+  failed
+}
+
+enum PayoutStatus {
+  pending
+  processed
+  failed
+}
+
+model Payment {
+  id                 String        @id @default(uuid())
+  bookingId          String
+  customerId         String
+  providerId         String?
+  providerUserId     String?
+  type               PaymentType   @default(booking)
+  status             PaymentStatus @default(pending)
+
+  amount             Float
+  platformFee        Float
+  providerEarning    Float
+  tipAmount          Float         @default(0)
+
+  paystackRef        String?       @unique
+  paystackAccessCode String?
+  authorizationUrl   String?
+
+  refundedAmount     Float         @default(0)
+  refundReason       String?
+
+  // Who / what workflow initiated this payment transaction, for auditability.
+  initiatedById      String?
+  initiatedByRole    String?
+  initiatedBy        String?
+
+  initiatedAt        DateTime      @default(now())
+  authorizedAt       DateTime?
+  capturedAt         DateTime?
+  failedAt           DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  refunds  Refund[]
+  payouts  Payout[]
+
+  @@unique([bookingId, type])
+  @@index([bookingId])
+  @@index([customerId])
+  @@index([providerId])
+  @@index([status])
+  @@index([paystackRef])
+  @@index([type])
+}
+
+model Refund {
+  id                 String       @id @default(uuid())
+  paymentId          String
+  amount             Float
+  reason             String?
+  initiatorId        String?
+  initiatorRole      String?
+  paystackRef        String?
+  status             RefundStatus @default(pending)
+  createdAt          DateTime     @default(now())
+  processedAt        DateTime?
+  failedAt           DateTime?
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([status])
+}
+
+model Payout {
+  id                String       @id @default(uuid())
+  paymentId         String
+  providerId        String
+  amount            Float
+  paystackRef       String?
+  transferCode      String?
+  status            PayoutStatus @default(pending)
+  scheduledAt       DateTime?
+  paidAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime     @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([providerId])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  event       String
+  reference   String
+  payload     Json
+  verified    Boolean  @default(true)
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([event, reference])
+  @@index([reference])
 }

@@ -1,6 +1,69 @@
 import { prisma } from "../db/prisma";
+import { config } from "../config/env";
 import { haversineDistance } from "../utils/distance";
 import type { SearchProvidersInput } from "../validation/searchValidation";
+
+interface ProviderUserInfo {
+  id: string;
+  email: string;
+  phone: string | null;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+  role: string;
+  createdAt: string;
+}
+
+async function fetchUsersForProviders(userIds: string[]): Promise<Map<string, ProviderUserInfo>> {
+  const userMap = new Map<string, ProviderUserInfo>();
+  if (userIds.length === 0) return userMap;
+
+  try {
+    const idsParam = userIds.join(",");
+    const response = await fetch(
+      `${config.identityServiceUrl}/internal/users/batch?ids=${idsParam}`,
+      {
+        headers: {
+          "x-service-token": config.internalServiceToken,
+        },
+      },
+    );
+    if (response.ok) {
+      const data = await response.json() as { data: ProviderUserInfo[] };
+      if (Array.isArray(data.data)) {
+        for (const user of data.data) {
+          userMap.set(user.id, user);
+        }
+      }
+    }
+  } catch {
+    console.error("[Search] Failed to fetch user info from identity-service");
+  }
+
+  return userMap;
+}
+
+async function searchUserIds(query: string): Promise<string[]> {
+  try {
+    const response = await fetch(
+      `${config.identityServiceUrl}/internal/users/search?query=${encodeURIComponent(query)}&limit=50`,
+      {
+        headers: {
+          "x-service-token": config.internalServiceToken,
+        },
+      },
+    );
+    if (response.ok) {
+      const data = await response.json() as { data: Array<{ id: string }> };
+      if (Array.isArray(data.data)) {
+        return data.data.map((u) => u.id);
+      }
+    }
+  } catch {
+    console.error("[Search] Failed to search users via identity-service");
+  }
+  return [];
+}
 
 export const searchProviders = async (input: SearchProvidersInput) => {
   const { lat, lng, radiusKm, categoryId, serviceId, minRating, minPrice, maxPrice, verified, q, page, limit, sortBy } = input;
@@ -45,6 +108,20 @@ export const searchProviders = async (input: SearchProvidersInput) => {
     };
   }
 
+  // Provider name search. Names live in identity-service, so resolve matching
+  // user IDs there and filter profiles by those IDs (bio/userId also matched).
+  if (q && q.trim()) {
+    const matchedUserIds = await searchUserIds(q.trim());
+    const orConditions: Record<string, unknown>[] = [
+      { bio: { contains: q.trim(), mode: "insensitive" } },
+      { userId: { contains: q.trim(), mode: "insensitive" } },
+    ];
+    if (matchedUserIds.length > 0) {
+      orConditions.push({ userId: { in: matchedUserIds } });
+    }
+    where.OR = orConditions;
+  }
+
   let profiles = await prisma.providerProfile.findMany({
     where,
     include: {
@@ -80,8 +157,16 @@ export const searchProviders = async (input: SearchProvidersInput) => {
 
   const total = profiles.length;
 
+  // Enrich with the provider's user (name + avatar) from identity-service.
+  const userIds = profiles.map((p) => p.userId);
+  const userMap = await fetchUsersForProviders(userIds);
+  const providers = profiles.map((provider) => ({
+    ...provider,
+    user: userMap.get(provider.userId) || null,
+  }));
+
   return {
-    providers: profiles,
+    providers,
     total,
     page,
     limit,

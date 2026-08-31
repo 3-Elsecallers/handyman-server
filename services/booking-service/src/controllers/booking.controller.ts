@@ -11,7 +11,6 @@ import {
 
 export const createBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log("here")
     const isRequest = req.body?.type === "request";
     let booking;
     if (isRequest) {

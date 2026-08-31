@@ -34,9 +34,9 @@ export const errorHandler = (
   }
 
   if (err.statusCode) {
-    return sendError(res, err.statusCode, err.message || "Booking service error");
+    return sendError(res, err.statusCode, err.message || "Payment service error");
   }
 
-  console.error("[Booking] Unhandled error:", err);
+  console.error("[Payment] Unhandled error:", err);
   return sendError(res, 500, "Internal server error");
 };

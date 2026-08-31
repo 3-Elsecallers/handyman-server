@@ -1,17 +1,26 @@
 import { Request, Response, NextFunction } from "express";
 import * as reviewService from "../services/reviewService";
 import { submitReviewSchema, respondToReviewSchema } from "../validation/searchValidation";
+import { AppError } from "../middlewares/errorHandler.middleware";
+import { fetchBooking } from "../utils/serviceClient";
 
 export const submitReview = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const input = submitReviewSchema.parse(req.body);
-    const { providerId } = req.params;
-    const bookingId = req.body.bookingId || req.params.id;
+    const bookingId = req.params.id as string;
+    const booking = await fetchBooking(bookingId);
+
+    if (booking.customerId !== req.user!.id) {
+      throw new AppError(403, "Only the booking's customer can submit a review");
+    }
+    if (!booking.providerId) {
+      throw new AppError(400, "Booking has no provider to review");
+    }
 
     const review = await reviewService.submitReview(
       bookingId,
       req.user!.id,
-      providerId as string,
+      booking.providerId,
       input.rating,
       input.comment,
       input.photoUrls,
