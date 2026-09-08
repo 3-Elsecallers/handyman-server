@@ -5,6 +5,7 @@ import {
   fetchUser,
   fetchProvider,
   fetchService,
+  verifyProviderServiceBookable,
   validateProviderAvailability,
   matchProviderCandidates,
 } from "../utils/serviceClient";
@@ -31,6 +32,12 @@ const bookingSelect = {
   type: true,
   status: true,
   paymentStatus: true,
+  paymentMethod: true,
+  paymentConfirmedById: true,
+  paymentConfirmedAt: true,
+  paymentAmountExpected: true,
+  paymentDueAt: true,
+  paymentOverdue: true,
   scheduledAt: true,
   scheduledWindowEnd: true,
   completedAt: true,
@@ -192,6 +199,7 @@ export const createInstantBooking = async (
     complexity: "standard" | "moderate" | "complex";
     promoCode?: string;
     notes?: string;
+    paymentMethod?: "online" | "cash";
     locationLine1: string;
     locationLine2?: string;
     locationCity: string;
@@ -205,8 +213,9 @@ export const createInstantBooking = async (
 
   const service = await fetchService(input.serviceId);
   const provider = await fetchProvider(input.providerId);
-  if (provider.status !== "active" || !provider.verified) {
-    throw new AppError(400, "Provider is not available for booking");
+  const bookable = await verifyProviderServiceBookable(input.providerId, input.serviceId);
+  if (!bookable.bookable) {
+    throw new AppError(400, bookable.reason || "Provider is not available for booking");
   }
 
   const scheduledAt = new Date(input.scheduledAt);
@@ -244,6 +253,7 @@ export const createInstantBooking = async (
       serviceId: input.serviceId,
       type: "instant",
       status: "pending",
+      paymentMethod: input.paymentMethod === "cash" ? "cash" : "online",
       scheduledAt,
       durationMins: service.durationMins,
       locationLine1: input.locationLine1,
@@ -294,6 +304,7 @@ export const createRequestBooking = async (
     scheduledWindowEnd: string;
     complexity: "standard" | "moderate" | "complex";
     description: string;
+    paymentMethod?: "online" | "cash";
     locationLine1: string;
     locationLine2?: string;
     locationCity: string;
@@ -336,6 +347,7 @@ export const createRequestBooking = async (
       serviceId: input.serviceId,
       type: "request",
       status: "pending",
+      paymentMethod: input.paymentMethod === "cash" ? "cash" : "online",
       scheduledAt: scheduledStart,
       scheduledWindowEnd: scheduledEnd,
       durationMins: service.durationMins,
@@ -393,7 +405,7 @@ export const confirmBooking = async (
     }
     const updated = await prisma.booking.update({
       where: { id: booking.id },
-      data: { status: "confirmed" },
+      data: { status: "confirmed", paymentStatus: "accepted" },
     });
     await recordTimeline(booking.id, "confirmed", providerUserId, "provider", "Provider accepted");
     await publishEvent("booking.confirmed", booking.id, {
@@ -413,6 +425,10 @@ export const confirmBooking = async (
   }
 
   const provider = await fetchProvider(invite.providerId);
+  const bookable = await verifyProviderServiceBookable(invite.providerId, booking.serviceId);
+  if (!bookable.bookable) {
+    throw new AppError(400, bookable.reason || "This service is no longer available for booking");
+  }
   const price = computePrice({
     basePrice: booking.basePrice / (booking.complexityMultiplier || 1),
     complexity: booking.complexity as "standard" | "moderate" | "complex",
@@ -442,6 +458,7 @@ export const confirmBooking = async (
         where: { id: booking.id },
         data: {
           status: "confirmed",
+          paymentStatus: "accepted",
           providerId: provider.id,
           providerUserId: provider.userId,
           travelFee: price.travelFee,
@@ -488,6 +505,7 @@ export const declineBooking = async (
     await publishEvent("booking.cancelled", booking.id, {
       bookingId: booking.id,
       cancelledBy: providerUserId,
+      cancelledByRole: "provider",
       reason: "Provider declined",
       refundAmount: 0,
     });
@@ -597,13 +615,10 @@ export const startBooking = async (bookingId: string, providerId: string) => {
   if (booking.status !== "confirmed") {
     throw new AppError(409, `Cannot start a booking in status ${booking.status}`);
   }
-  if (booking.paymentStatus !== "paid") {
-    throw new AppError(402, "Booking must be paid before the service can start");
-  }
 
   const updated = await prisma.booking.update({
     where: { id: booking.id },
-    data: { status: "in_progress" },
+    data: { status: "in_progress", paymentStatus: "in_progress" },
   });
   await recordTimeline(booking.id, "in_progress", providerId, "provider", "Service started");
 
@@ -626,9 +641,16 @@ export const completeBooking = async (bookingId: string, providerId: string) => 
     throw new AppError(409, `Cannot complete a booking in status ${booking.status}`);
   }
 
+  const paymentDoneAt = new Date();
   const updated = await prisma.booking.update({
     where: { id: booking.id },
-    data: { status: "completed", completedAt: new Date() },
+    data: {
+      status: "completed",
+      completedAt: paymentDoneAt,
+      paymentStatus: "pending",
+      paymentAmountExpected: booking.priceQuote,
+      paymentDueAt: new Date(paymentDoneAt.getTime() + 24 * 60 * 60 * 1000),
+    },
   });
   await recordTimeline(booking.id, "completed", providerId, "provider", "Service completed");
 
@@ -638,6 +660,90 @@ export const completeBooking = async (bookingId: string, providerId: string) => 
     providerId: booking.providerId,
     serviceId: booking.serviceId,
     priceQuote: booking.priceQuote,
+    paymentMethod: updated.paymentMethod,
+    paymentStatus: updated.paymentStatus,
+  });
+
+  return updated;
+};
+
+export const markPaid = async (
+  bookingId: string,
+  actingUser: { id: string; role: string },
+) => {
+  const booking = await getBookingById(bookingId);
+  assertAccess(booking, actingUser);
+  if (booking.status !== "completed") {
+    throw new AppError(409, "Payment can only be marked after the service is completed");
+  }
+
+  let paymentStatus: "cash_outstanding" | "paid" = "cash_outstanding";
+  if (booking.paymentMethod === "online") {
+    paymentStatus = "paid";
+  }
+
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { paymentStatus },
+  });
+  await recordTimeline(
+    booking.id,
+    "completed",
+    actingUser.id,
+    actingUser.role,
+    paymentStatus === "cash_outstanding"
+      ? "Customer intends to pay cash"
+      : "Customer paid online",
+  );
+
+  await publishEvent("booking.payment-required", booking.id, {
+    bookingId: booking.id,
+    customerId: booking.customerId,
+    providerId: booking.providerId,
+    paymentMethod: booking.paymentMethod,
+    paymentStatus,
+  });
+
+  return updated;
+};
+
+export const confirmCash = async (bookingId: string, providerUserId: string) => {
+  const booking = await getBookingById(bookingId);
+  assertAccess(booking, { id: providerUserId, role: "provider" });
+  if (booking.providerUserId !== providerUserId) {
+    throw new AppError(403, "Only the booking provider can confirm payment");
+  }
+  if (booking.paymentMethod !== "cash") {
+    throw new AppError(409, "Only cash bookings can be cash-confirmed");
+  }
+  if (booking.paymentStatus !== "cash_outstanding") {
+    throw new AppError(
+      409,
+      `Cannot confirm cash in payment status ${booking.paymentStatus}`,
+    );
+  }
+
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      paymentStatus: "cash_collected",
+      paymentConfirmedById: providerUserId,
+      paymentConfirmedAt: new Date(),
+    },
+  });
+  await recordTimeline(
+    booking.id,
+    "completed",
+    providerUserId,
+    "provider",
+    "Provider confirmed cash received",
+  );
+
+  await publishEvent("payment.confirmed", booking.id, {
+    bookingId: booking.id,
+    paymentMethod: "cash",
+    paymentStatus: "cash_collected",
+    confirmedById: providerUserId,
   });
 
   return updated;
@@ -687,6 +793,7 @@ export const cancelBooking = async (
   await publishEvent("booking.cancelled", booking.id, {
     bookingId: booking.id,
     cancelledBy: actingUser.id,
+    cancelledByRole: actingUser.role,
     reason: reason || undefined,
     refundAmount,
   });
@@ -750,12 +857,24 @@ export const resolveDispute = async (
   );
 
   if (input.resolveTo === "completed") {
+    const paymentDoneAt = new Date();
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        completedAt: paymentDoneAt,
+        paymentStatus: "pending",
+        paymentAmountExpected: booking.priceQuote,
+        paymentDueAt: new Date(paymentDoneAt.getTime() + 24 * 60 * 60 * 1000),
+      },
+    });
     await publishEvent("booking.completed", booking.id, {
       bookingId: booking.id,
       customerId: booking.customerId,
       providerId: booking.providerId,
       serviceId: booking.serviceId,
       priceQuote: booking.priceQuote,
+      paymentMethod: booking.paymentMethod,
+      paymentStatus: "pending",
     });
   }
 
@@ -890,8 +1009,9 @@ export const getBookingEstimate = async (
   let scheduledAt = new Date();
   if (input.type === "instant" && input.providerId) {
     provider = await fetchProvider(input.providerId);
-    if (provider.status !== "active" || !provider.verified) {
-      throw new AppError(400, "Provider is not available for booking");
+    const bookable = await verifyProviderServiceBookable(input.providerId, input.serviceId);
+    if (!bookable.bookable) {
+      throw new AppError(400, bookable.reason || "Provider is not available for booking");
     }
   }
   if (input.scheduledAt) {

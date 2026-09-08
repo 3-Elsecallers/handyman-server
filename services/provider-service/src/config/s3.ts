@@ -62,6 +62,7 @@ export async function generateDownloadUrl(key: string): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: BUCKET,
     Key: key,
+    ResponseCacheControl: "no-store, no-cache, must-revalidate",
   });
   return getSignedUrl(s3, command, { expiresIn: 3600 });
 }

@@ -24,6 +24,12 @@ interface UserSuspendedEvent {
   userId: string;
 }
 
+interface PaymentConfirmedEvent {
+  bookingId: string;
+  paymentMethod?: string;
+  confirmedById?: string;
+}
+
 export const startKafkaConsumers = async () => {
   // Confirm payment received for a booking — gate service delivery
   await createConsumer("payment.captured", async (value) => {
@@ -48,6 +54,25 @@ export const startKafkaConsumers = async () => {
       },
     });
     console.log(`[Kafka] Refund recorded for booking ${event.bookingId}`);
+  });
+
+  // Provider confirmed payment received (cash or online echo) — mark booking confirmed
+  await createConsumer("payment.confirmed", async (value) => {
+    const event = value as unknown as PaymentConfirmedEvent;
+    if (!event.bookingId) return;
+    await prisma.booking.updateMany({
+      where: { id: event.bookingId },
+      data: {
+        paymentStatus: "confirmed",
+        ...(event.confirmedById
+          ? {
+              paymentConfirmedById: event.confirmedById,
+              paymentConfirmedAt: new Date(),
+            }
+          : {}),
+      },
+    });
+    console.log(`[Kafka] Payment confirmed for booking ${event.bookingId}`);
   });
 
   // Revalidate pending bookings when a provider's availability changes
@@ -88,6 +113,7 @@ export const startKafkaConsumers = async () => {
         await publishEvent("booking.cancelled", booking.id, {
           bookingId: booking.id,
           cancelledBy: "system",
+          cancelledByRole: "system",
           reason: "Provider no longer available",
           refundAmount: 0,
         });
@@ -129,6 +155,7 @@ export const startKafkaConsumers = async () => {
       await publishEvent("booking.cancelled", booking.id, {
         bookingId: booking.id,
         cancelledBy: "system",
+        cancelledByRole: "system",
         reason: "Account suspended",
         refundAmount: 0,
       });

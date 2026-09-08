@@ -78,6 +78,29 @@ export const fetchProvider = async (providerId: string): Promise<ProviderProfile
   return data;
 };
 
+export interface ProviderServiceBookable {
+  bookable: boolean;
+  reason?: string;
+}
+
+export const verifyProviderServiceBookable = async (
+  providerId: string,
+  serviceId: string,
+): Promise<ProviderServiceBookable> => {
+  const res = await fetch(
+    `${config.providerServiceUrl}/internal/providers/${providerId}/services/${serviceId}/bookable`,
+    {
+      method: "POST",
+      headers,
+    },
+  );
+  if (!res.ok) {
+    throw new AppError(502, "Provider service unavailable");
+  }
+  const { data } = (await res.json()) as { data: ProviderServiceBookable };
+  return data;
+};
+
 export const fetchService = async (serviceId: string): Promise<InternalService> => {
   const res = await fetch(`${config.providerServiceUrl}/internal/services/${serviceId}`, {
     headers,

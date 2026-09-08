@@ -52,7 +52,7 @@ export const services: ServiceConfig[] = [
   {
     name: "provider-service",
     baseUrl: process.env.PROVIDER_SERVICE_URL || "http://localhost:8082",
-    prefixes: ["/providers", "/search", "/matching", "/bookings", "/reviews", "/services", "/admin/providers", "/admin/services", "/admin/reviews", "/admin/audit-log", "/admin/documents"],
+    prefixes: ["/providers", "/search", "/matching", "/bookings", "/reviews", "/services", "/admin/providers", "/admin/services", "/admin/reviews", "/admin/audit-log", "/admin/documents", "/admin/quality"],
     publicPaths: [
       /^\/providers\/[a-f0-9-]+$/,
       /^\/search\//,

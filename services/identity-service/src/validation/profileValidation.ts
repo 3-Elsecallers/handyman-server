@@ -6,6 +6,14 @@ export const updateProfileSchema = z.object({
   phone: z.string().optional(),
 });
 
+export const avatarUploadRequestSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  fileSize: z.number().int().positive(),
+  mimeType: z.string().min(1),
+});
+
+export type AvatarUploadRequestInput = z.infer<typeof avatarUploadRequestSchema>;
+
 export const updateNotificationPrefsSchema = z.object({
   bookingConfirmedPush: z.boolean().optional(),
   bookingConfirmedEmail: z.boolean().optional(),

@@ -14,12 +14,6 @@ enum ProviderStatus {
   deactivated
 }
 
-enum DocumentCategory {
-  selfie
-  ghana_card
-  additional
-}
-
 enum DocumentStatus {
   uploaded
   pending_review
@@ -34,10 +28,30 @@ enum VerificationStatus {
   rejected
 }
 
+enum IdentityStatus {
+  not_submitted
+  pending_review
+  approved
+  rejected
+}
+
 enum ReviewStatus {
   visible
   flagged
   removed
+}
+
+enum RequirementType {
+  document
+  attestation
+  certification
+}
+
+enum QuestionType {
+  yes_no
+  text
+  single_choice
+  multiple_choice
 }
 
 model ProviderProfile {
@@ -56,7 +70,19 @@ model ProviderProfile {
   lat                 Float?
   lng                 Float?
   verificationStatus  VerificationStatus @default(not_submitted)
+  identityVerified    Boolean            @default(false)
+  identityStatus      IdentityStatus     @default(not_submitted)
+  identityRejectionNote String?
   rejectionNote       String?
+  competencyTier      String             @default("apprentice")
+  qualityGrade        String             @default("bronze")
+  probationaryEndDate DateTime?
+  probationaryBookingsRemaining Int?
+  joinedAt            DateTime?
+  suspendedAt         DateTime?
+  suspendedReason     String?
+  lastQualityReview   DateTime?
+  flaggedConditions   Json?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
@@ -65,10 +91,44 @@ model ProviderProfile {
   blockedSlots      BlockedSlot[]
   reviews           Review[]
   providerDocuments ProviderDocument[]
+  attestations      ProviderAttestation[]
+  qualityFlags      ProviderQualityFlag[]
+  bookingWindow     ProviderBookingWindow[]
 
   @@index([userId])
   @@index([lat, lng])
   @@index([status])
+  @@index([competencyTier])
+  @@index([qualityGrade])
+}
+
+model ProviderQualityFlag {
+  id         String   @id @default(uuid())
+  providerId String
+  code       String
+  message    String
+  severity   String   @default("warning")
+  active     Boolean  @default(true)
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, active])
+  @@index([code])
+}
+
+model ProviderBookingWindow {
+  id              String   @id @default(uuid())
+  providerId      String
+  bookingId       String   @unique
+  outcome         String   // completed | cancelled_provider | cancelled_customer | no_show | disputed
+  createdAt       DateTime @default(now())
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, createdAt])
+  @@index([providerId, outcome])
 }
 
 model ProviderService {
@@ -77,26 +137,36 @@ model ProviderService {
   serviceId   String
   customPrice Float?
   isActive    Boolean  @default(true)
+  status      VerificationStatus @default(not_submitted)
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  rejectionNote String?
   createdAt   DateTime @default(now())
 
   provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
   service  Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
+  attestations ProviderAttestation[]
+
   @@unique([providerId, serviceId])
   @@index([serviceId])
+  @@index([providerId, status])
 }
 
 model ServiceCategory {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  slug        String   @unique
-  description String?
-  iconUrl     String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id               String   @id @default(uuid())
+  name             String   @unique
+  slug             String   @unique
+  description      String?
+  iconUrl          String?
+  safetyRiskLevel  String   @default("low")
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
 
-  services Service[]
+  services    Service[]
+  requirements CategoryVettingRequirement[]
+  questions    CategoryQuestion[]
 
   @@index([slug])
 }
@@ -120,6 +190,67 @@ model Service {
 
   @@index([categoryId])
   @@index([slug])
+}
+
+model CategoryVettingRequirement {
+  id                String         @id @default(uuid())
+  categoryId        String
+  type              RequirementType
+  name              String
+  description       String?
+  isRequired        Boolean        @default(true)
+  acceptedMimeTypes String[]
+  maxFileSizeMb     Int            @default(10)
+  sortOrder         Int            @default(0)
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  category  ServiceCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  documents ProviderDocument[]
+  attestations ProviderAttestation[]
+
+  @@unique([categoryId, name])
+  @@index([categoryId])
+}
+
+model CategoryQuestion {
+  id         String       @id @default(uuid())
+  categoryId String
+  question   String
+  type       QuestionType
+  options    String[]
+  isRequired Boolean      @default(true)
+  sortOrder  Int          @default(0)
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  category     ServiceCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attestations ProviderAttestation[]
+
+  @@index([categoryId])
+}
+
+model ProviderAttestation {
+  id            String   @id @default(uuid())
+  providerId    String
+  serviceId     String?
+  requirementId String?
+  questionId    String?
+  answer        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  provider   ProviderProfile          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  service    ProviderService?         @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  requirement CategoryVettingRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  question    CategoryQuestion?        @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@unique([providerId, requirementId])
+  @@unique([providerId, questionId])
+  @@index([providerId])
+  @@index([serviceId])
 }
 
 model Availability {
@@ -170,22 +301,25 @@ model Review {
 }
 
 model ProviderDocument {
-  id              String           @id @default(uuid())
+  id              String         @id @default(uuid())
   providerId      String
-  category        DocumentCategory
+  requirementId   String?
+  category        String
   s3Key           String
   fileName        String
   fileSize        Int
   mimeType        String
-  status          DocumentStatus   @default(uploaded)
+  status          DocumentStatus @default(uploaded)
   rejectionReason String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider   ProviderProfile          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  requirement CategoryVettingRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
 
   @@index([providerId, category])
   @@index([providerId, status])
+  @@index([providerId, requirementId])
 }
 
 model AuditLog {

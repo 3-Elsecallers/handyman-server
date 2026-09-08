@@ -1,6 +1,7 @@
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler.middleware";
 import { publishEvent } from "../utils/kafka";
+import { recalculateProvider } from "./qualityService";
 
 
 export const submitReview = async (
@@ -52,6 +53,12 @@ export const submitReview = async (
     totalJobs: provider.totalJobs,
     completionRate: provider.completionRate,
   });
+
+  try {
+    await recalculateProvider(providerId);
+  } catch (err) {
+    console.error("[Quality] Failed to recalculate after review:", err);
+  }
 
   return review;
 };

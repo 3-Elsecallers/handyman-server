@@ -9,6 +9,7 @@ router.use(serviceAuth);
 router.post("/providers/match", internalController.matchProviders);
 router.get("/providers/:id", internalController.getProviderById);
 router.get("/providers/:id/services", internalController.getProviderServices);
+router.post("/providers/:id/services/:serviceId/bookable", internalController.verifyProviderServiceBookable);
 router.post("/providers/:id/availability/validate", internalController.validateAvailability);
 router.get("/services/:id", internalController.getServiceById);
 router.get("/services/categories", internalController.listCategories);

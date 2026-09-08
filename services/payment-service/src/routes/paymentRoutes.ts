@@ -26,6 +26,18 @@ import {
   refundPayment,
   verifyPayment,
   webhook,
+  providerWallet,
+  confirmPayment,
+  getPayoutMethod,
+  savePayoutMethod,
+  updatePayoutMethod,
+  deletePayoutMethod,
+  withdraw,
+  listWithdrawals,
+  adminCompanyWallet,
+  adminListLedger,
+  adminListAccounts,
+  adminListWithdrawals,
 } from "../controllers/paymentController";
 
 const router = Router();
@@ -42,6 +54,14 @@ router.post("/:id/refund", refundPayment);
 router.get("/provider/earnings", providerEarnings);
 router.get("/provider/payouts", providerPayouts);
 router.get("/provider/ledger", providerLedger);
+router.get("/provider/wallet", requireRole("provider"), providerWallet);
+router.get("/provider/payout-method", requireRole("provider"), getPayoutMethod);
+router.post("/provider/payout-method", requireRole("provider"), savePayoutMethod);
+router.put("/provider/payout-method", requireRole("provider"), updatePayoutMethod);
+router.delete("/provider/payout-method", requireRole("provider"), deletePayoutMethod);
+router.post("/provider/withdraw", requireRole("provider"), withdraw);
+router.get("/provider/withdrawals", requireRole("provider"), listWithdrawals);
+router.post("/:id/confirm", requireRole("provider"), confirmPayment);
 
 // Admin
 router.get("/admin/payments", requireRole("admin"), adminListPayments);
@@ -50,6 +70,10 @@ router.get("/admin/refunds", requireRole("admin"), adminListRefunds);
 router.get("/admin/refunds/:id", requireRole("admin"), adminGetRefund);
 router.get("/admin/payouts", requireRole("admin"), adminListPayouts);
 router.post("/admin/payouts", requireRole("admin"), adminRecordPayout);
+router.get("/admin/company/wallet", requireRole("admin"), adminCompanyWallet);
+router.get("/admin/ledger", requireRole("admin"), adminListLedger);
+router.get("/admin/accounts", requireRole("admin"), adminListAccounts);
+router.get("/admin/withdrawals", requireRole("admin"), adminListWithdrawals);
 
 // Internal (service-to-service)
 router.post("/internal/payments", serviceAuth, internalCreatePayment);

@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma";
-import { createConsumer } from "../utils/kafka";
-import { getByBooking, capturePayment, refundPayment } from "../services/paymentService";
+import { createConsumer, publishEvent } from "../utils/kafka";
+import { getByBooking, capturePayment, refundPayment, confirmCashPaid, initializeForBooking } from "../services/paymentService";
 
 /**
  * Reacts to booking-service lifecycle events.
@@ -61,4 +61,39 @@ export const startConsumers = async () => {
       });
     }
   });
+
+  // booking.completed: post-service payment is now due. For cash bookings,
+  // open/refresh the Payment record (no Paystack charge) so a provider can
+  // confirm it; for online bookings, ensure the record exists. Also publishes
+  // a payment-required event to drive the customer prompt and reminders.
+  await createConsumer("booking.completed", async (value) => {
+    const evt = value as Record<string, unknown>;
+    const bookingId = evt.bookingId as string | undefined;
+    const paymentMethod = (evt.paymentMethod as "online" | "cash" | undefined) || "online";
+    if (!bookingId) return;
+
+    const payment = await getByBooking(bookingId, "booking");
+    if (!payment) {
+      await initializeForBooking(bookingId, { id: "system", role: "system", source: "internal.booking.completed" }, paymentMethod);
+    }
+
+    await publishEvent("payment.required", bookingId, {
+      bookingId,
+      paymentMethod,
+      source: "booking.completed",
+    });
+  });
+};
+
+export const onCustomerPaysCash = async (args: {
+  bookingId: string;
+  customerId: string;
+  providerId: string | null;
+  providerUserId: string | null;
+  amount: number;
+  platformFee: number;
+  providerEarning: number;
+}) => {
+  // Already-handled via confirmCashPaid; kept for explicit callers.
+  return;
 };

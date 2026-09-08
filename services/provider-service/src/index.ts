@@ -8,6 +8,7 @@ import { errorHandler } from "./middlewares/errorHandler.middleware";
 import { notFound } from "./middlewares/notFound.middleware";
 import { startKafkaConsumers } from "./services/kafkaConsumer";
 import { getPublicProfile } from "./controllers/provider.controller";
+import { recalculateAllProviders } from "./services/qualityService";
 
 import healthRoutes from "./routes/health.route";
 import providerRoutes from "./routes/provider.route";
@@ -58,6 +59,28 @@ app.use(errorHandler);
 startKafkaConsumers().catch((err) => {
   console.error("[Provider] Failed to start Kafka consumers:", err);
 });
+
+// Weekly quality recalculation (every Sunday 02:00 UTC)
+const WEEKLY_MS = 7 * 24 * 60 * 60 * 1000;
+const scheduleWeeklyRecalc = () => {
+  const now = new Date();
+  const nextSunday = new Date(now);
+  nextSunday.setUTCDate(now.getUTCDate() + ((7 - now.getUTCDay()) % 7 || 7));
+  nextSunday.setUTCHours(2, 0, 0, 0);
+  let delay = nextSunday.getTime() - now.getTime();
+  if (delay < 0) delay += WEEKLY_MS;
+
+  setTimeout(async () => {
+    try {
+      const result = await recalculateAllProviders();
+      console.log(`[Quality] Weekly recalculation complete: ${result.recalculated} providers`);
+    } catch (err) {
+      console.error("[Quality] Weekly recalculation failed:", err);
+    }
+    scheduleWeeklyRecalc();
+  }, delay);
+};
+scheduleWeeklyRecalc();
 
 app.listen(config.port, () =>
   console.log(`[Provider] Service online on port ${config.port}`),

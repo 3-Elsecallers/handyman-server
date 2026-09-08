@@ -3,6 +3,15 @@ import { AppError } from "../middlewares/errorHandler.middleware";
 import { publishEvent } from "../utils/kafka";
 import { generateDownloadUrl, getDocumentStream } from "../config/s3";
 import { config } from "../config/env";
+import {
+  checkRequirementCompleteness,
+  getProviderChecklist,
+  checkServiceCompleteness,
+  getServiceChecklist,
+} from "./vettingService";
+import { recomputeProviderVerificationStatus } from "./providerService";
+
+const IDENTITY_CATEGORIES = ["selfie", "ghana_card", "additional"];
 
 interface ProviderUserInfo {
   id: string;
@@ -72,6 +81,7 @@ export const listAllProviders = async (query: {
   search?: string;
   status?: string;
   verificationStatus?: string;
+  identityStatus?: string;
 }) => {
   const page = query.page || 1;
   const limit = Math.min(query.limit || 20, 100);
@@ -85,6 +95,10 @@ export const listAllProviders = async (query: {
 
   if (query.verificationStatus) {
     where.verificationStatus = query.verificationStatus;
+  }
+
+  if (query.identityStatus) {
+    where.identityStatus = query.identityStatus;
   }
 
   if (query.search) {
@@ -218,22 +232,78 @@ export const verifyProvider = async (
   approved: boolean,
   adminId: string,
   rejectionNote?: string,
+  overrideReason?: string,
 ) => {
   const profile = await prisma.providerProfile.findUnique({ where: { id: providerId } });
   if (!profile) throw new AppError(404, "Provider not found");
+
+  if (profile.verificationStatus !== "pending_review") {
+    throw new AppError(409, "This provider's verification status has changed. Please refresh.");
+  }
 
   if (!approved && !rejectionNote?.trim()) {
     throw new AppError(400, "Rejection reason is required when rejecting a provider");
   }
 
+  if (approved) {
+    const { complete, missing } = await checkRequirementCompleteness(providerId);
+    if (!complete && !overrideReason?.trim()) {
+      throw new AppError(
+        400,
+        `Incomplete requirements: ${missing.join(", ")}`,
+      );
+    }
+    if (!complete && overrideReason?.trim()) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: "provider_verified_override",
+          targetType: "provider",
+          targetId: providerId,
+          metadata: { overrideReason: overrideReason.trim(), missingRequirements: missing },
+        },
+      });
+    }
+  }
+
+  const updatedData: {
+    verified: boolean;
+    status: "active" | "suspended";
+    verificationStatus: "approved" | "rejected";
+    rejectionNote: string | null;
+    joinedAt?: Date;
+    probationaryEndDate?: Date;
+    probationaryBookingsRemaining?: number;
+  } = {
+    verified: approved,
+    status: approved ? "active" : "suspended",
+    verificationStatus: approved ? "approved" : "rejected",
+    rejectionNote: approved ? (overrideReason?.trim() || null) : (rejectionNote?.trim() || null),
+  };
+
+  if (approved) {
+    if (!profile.joinedAt) updatedData.joinedAt = new Date();
+
+    const providerServices = await prisma.providerService.findMany({
+      where: { providerId, isActive: true },
+      include: { service: { include: { category: true } } },
+    });
+    let riskLevel: string | null = null;
+    for (const ps of providerServices) {
+      const level = ps.service.category.safetyRiskLevel;
+      const weight = level === "high" ? 3 : level === "medium" ? 2 : 1;
+      const currentWeight = riskLevel === "high" ? 3 : riskLevel === "medium" ? 2 : 1;
+      if (weight >= currentWeight) riskLevel = level;
+    }
+    const probationBookings = riskLevel === "high" ? 10 : riskLevel === "medium" ? 8 : 5;
+
+    updatedData.probationaryEndDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    updatedData.probationaryBookingsRemaining = probationBookings;
+  }
+
   const updated = await prisma.providerProfile.update({
     where: { id: providerId },
-    data: {
-      verified: approved,
-      status: approved ? "active" : "suspended",
-      verificationStatus: approved ? "approved" : "rejected",
-      rejectionNote: approved ? null : rejectionNote?.trim() || null,
-    },
+    data: updatedData,
   });
 
   if (approved) {
@@ -274,6 +344,44 @@ export const verifyProvider = async (
   return updated;
 };
 
+export const reviewDocument = async (
+  documentId: string,
+  approved: boolean,
+  adminId: string,
+  rejectionReason?: string,
+) => {
+  const doc = await prisma.providerDocument.findUnique({ where: { id: documentId } });
+  if (!doc) throw new AppError(404, "Document not found");
+
+  if (!approved && !rejectionReason?.trim()) {
+    throw new AppError(400, "Rejection reason is required when rejecting a document");
+  }
+
+  const updated = await prisma.providerDocument.update({
+    where: { id: documentId },
+    data: {
+      status: approved ? "approved" : "rejected",
+      rejectionReason: approved ? null : rejectionReason?.trim() || null,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: approved ? "document_approved" : "document_rejected",
+      targetType: "provider_document",
+      targetId: documentId,
+      metadata: {
+        providerId: doc.providerId,
+        fileName: doc.fileName,
+        ...(rejectionReason?.trim() ? { rejectionReason: rejectionReason.trim() } : {}),
+      },
+    },
+  });
+
+  return updated;
+};
+
 export const getProviderReviews = async (providerId: string, page = 1, limit = 20) => {
   const skip = (page - 1) * limit;
 
@@ -289,6 +397,183 @@ export const getProviderReviews = async (providerId: string, page = 1, limit = 2
 
   return { reviews, total, page, limit, totalPages: Math.ceil(total / limit) };
 };
+
+export const getProviderIdentity = async (providerId: string) => {
+  const profile = await prisma.providerProfile.findUnique({
+    where: { id: providerId },
+    include: {
+      providerDocuments: {
+        where: { category: { in: IDENTITY_CATEGORIES } },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!profile) throw new AppError(404, "Provider not found");
+
+  return {
+    identityStatus: profile.identityStatus,
+    identityVerified: profile.identityVerified,
+    identityRejectionNote: profile.identityRejectionNote,
+    documents: profile.providerDocuments,
+  };
+};
+
+export const reviewIdentity = async (
+  providerId: string,
+  approved: boolean,
+  adminId: string,
+  rejectionNote?: string,
+) => {
+  const profile = await prisma.providerProfile.findUnique({
+    where: { id: providerId },
+    include: {
+      providerDocuments: { where: { category: { in: IDENTITY_CATEGORIES } } },
+    },
+  });
+  if (!profile) throw new AppError(404, "Provider not found");
+
+  if (profile.identityStatus !== "pending_review") {
+    throw new AppError(409, "This provider's identity is not pending review.");
+  }
+
+  if (!approved && !rejectionNote?.trim()) {
+    throw new AppError(400, "Rejection reason is required when rejecting identity verification");
+  }
+
+  if (approved) {
+    const identityDocs = profile.providerDocuments.filter((d) =>
+      IDENTITY_CATEGORIES.includes(d.category),
+    );
+    const requiredApproved = identityDocs.every((d) => d.status === "approved");
+    if (!requiredApproved) {
+      const pending = identityDocs.filter((d) => d.status !== "approved").map((d) => d.category);
+      throw new AppError(400, `All identity documents must be approved. Not approved: ${pending.join(", ")}`);
+    }
+  }
+
+  const updated = await prisma.providerProfile.update({
+    where: { id: providerId },
+    data: {
+      identityStatus: approved ? "approved" : "rejected",
+      identityVerified: approved,
+      identityRejectionNote: approved ? null : rejectionNote?.trim() || null,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: approved ? "identity_verified" : "identity_rejected",
+      targetType: "provider",
+      targetId: providerId,
+      metadata: approved ? undefined : { rejectionNote: rejectionNote?.trim() },
+    },
+  });
+
+  await publishEvent(approved ? "provider.identity.verified" : "provider.identity.rejected", providerId, {
+    providerId,
+    adminId,
+    rejectionNote: approved ? undefined : rejectionNote?.trim(),
+  });
+
+  await recomputeProviderVerificationStatus(providerId);
+
+  return updated;
+};
+
+export const getProviderServices = async (providerId: string) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { id: providerId } });
+  if (!profile) throw new AppError(404, "Provider not found");
+
+  const services = await prisma.providerService.findMany({
+    where: { providerId },
+    include: { service: { include: { category: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return services;
+};
+
+export const getProviderServiceChecklist = async (providerId: string, providerServiceId: string) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { id: providerId } });
+  if (!profile) throw new AppError(404, "Provider not found");
+  return getServiceChecklist(providerId, providerServiceId);
+};
+
+export const reviewService = async (
+  providerId: string,
+  providerServiceId: string,
+  approved: boolean,
+  adminId: string,
+  rejectionNote?: string,
+) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { id: providerId } });
+  if (!profile) throw new AppError(404, "Provider not found");
+
+  const ps = await prisma.providerService.findFirst({
+    where: { id: providerServiceId, providerId },
+  });
+  if (!ps) throw new AppError(404, "Service offering not found");
+
+  if (ps.status !== "pending_review") {
+    throw new AppError(409, "This service is not pending review.");
+  }
+
+  if (profile.identityStatus !== "approved") {
+    throw new AppError(
+      400,
+      "The provider's identity must be approved before a service can be approved.",
+    );
+  }
+
+  if (!approved && !rejectionNote?.trim()) {
+    throw new AppError(400, "Rejection reason is required when rejecting a service");
+  }
+
+  if (approved) {
+    const { complete, missing } = await checkServiceCompleteness(providerId, providerServiceId);
+    if (!complete) {
+      throw new AppError(400, `Incomplete service requirements: ${missing.join(", ")}`);
+    }
+  }
+
+  const updated = await prisma.providerService.update({
+    where: { id: providerServiceId },
+    data: {
+      status: approved ? "approved" : "rejected",
+      isActive: approved ? true : false,
+      reviewedAt: new Date(),
+      rejectionNote: approved ? null : rejectionNote?.trim() || null,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: approved ? "service_verified" : "service_rejected",
+      targetType: "provider_service",
+      targetId: providerServiceId,
+      metadata: {
+        providerId,
+        serviceId: ps.serviceId,
+        ...(rejectionNote?.trim() ? { rejectionNote: rejectionNote.trim() } : {}),
+      },
+    },
+  });
+
+  await publishEvent(approved ? "provider.service.verified" : "provider.service.rejected", providerId, {
+    providerId,
+    providerServiceId,
+    serviceId: ps.serviceId,
+    adminId,
+    rejectionNote: approved ? undefined : rejectionNote?.trim(),
+  });
+
+  await recomputeProviderVerificationStatus(providerId);
+
+  return updated;
+};
+
 
 export const createCategory = async (
   input: { name: string; description?: string; iconUrl?: string; sortOrder?: number },
@@ -473,3 +758,13 @@ export const getAuditLog = async (page = 1, limit = 50) => {
 const slugify = (text: string) => {
   return text.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
 }
+
+export const getProviderRequirementChecklist = async (providerId: string) => {
+  const profile = await prisma.providerProfile.findUnique({ where: { id: providerId } });
+  if (!profile) throw new AppError(404, "Provider not found");
+
+  const checklist = await getProviderChecklist(providerId);
+  const { complete, missing } = await checkRequirementCompleteness(providerId);
+
+  return { ...checklist, complete, missing };
+};

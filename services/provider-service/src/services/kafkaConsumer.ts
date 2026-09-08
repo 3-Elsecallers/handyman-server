@@ -1,6 +1,7 @@
 import { createConsumer } from "../utils/kafka";
 import { prisma } from "../db/prisma";
 import { publishEvent } from "../utils/kafka";
+import { recalculateProvider } from "./qualityService";
 
 interface UserRegisteredEvent {
   userId: string;
@@ -16,10 +17,13 @@ interface UserSuspendedEvent {
 
 interface BookingCompletedEvent {
   providerId: string;
+  bookingId: string;
 }
 
 interface BookingCancelledEvent {
   providerId: string;
+  bookingId: string;
+  cancelledByRole?: string;
 }
 
 export const startKafkaConsumers = async () => {
@@ -60,6 +64,27 @@ export const startKafkaConsumers = async () => {
         where: { id: event.providerId },
         data: { totalJobs, completionRate },
       });
+
+      if (event.bookingId) {
+        await prisma.providerBookingWindow.upsert({
+          where: { bookingId: event.bookingId },
+          create: {
+            providerId: event.providerId,
+            bookingId: event.bookingId,
+            outcome: "completed",
+          },
+          update: { outcome: "completed" },
+        });
+      }
+
+      if (profile.probationaryBookingsRemaining !== null && profile.probationaryBookingsRemaining !== undefined && profile.probationaryBookingsRemaining > 0) {
+        await prisma.providerProfile.update({
+          where: { id: event.providerId },
+          data: { probationaryBookingsRemaining: profile.probationaryBookingsRemaining - 1 },
+        });
+      }
+
+      await recalculateProvider(event.providerId);
     }
   });
 
@@ -77,6 +102,21 @@ export const startKafkaConsumers = async () => {
         where: { id: event.providerId },
         data: { totalJobs, completionRate },
       });
+
+      if (event.bookingId) {
+        const isProviderCancellation = event.cancelledByRole === "provider";
+        await prisma.providerBookingWindow.upsert({
+          where: { bookingId: event.bookingId },
+          create: {
+            providerId: event.providerId,
+            bookingId: event.bookingId,
+            outcome: isProviderCancellation ? "cancelled_provider" : "cancelled_customer",
+          },
+          update: {},
+        });
+      }
+
+      await recalculateProvider(event.providerId);
     }
   });
 

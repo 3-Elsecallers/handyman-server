@@ -1,5 +1,6 @@
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler.middleware";
+import { publishEvent } from "../utils/kafka";
 import { capturePayment, markPayoutProcessed } from "./paymentService";
 
 interface PaystackWebhookPayload {
@@ -9,10 +10,12 @@ interface PaystackWebhookPayload {
     status?: string;
     amount?: number;
     domain?: string;
+    transfersession?: Record<string, unknown>;
     transfer?: {
       reference?: string;
       status?: string;
       amount?: number;
+      transfer_code?: string;
     };
   };
 }
@@ -59,6 +62,14 @@ export const processWebhook = async (input: { event: string; rawPayload: unknown
         await onTransferSuccess(payload);
         break;
 
+      case "transfer.failed":
+        await onTransferFailed(payload);
+        break;
+
+      case "transfer.reversed":
+        await onTransferReversed(payload);
+        break;
+
       default:
         // Unknown/irrelevant event — acknowledged, not persisted as processed.
         await prisma.webhookEvent.delete({ where: { id: eventId } });
@@ -96,6 +107,27 @@ const onTransferSuccess = async (payload: PaystackWebhookPayload) => {
   const transfer = payload?.data?.transfer;
   if (!transfer?.reference) throw new AppError(400, "Missing transfer reference");
 
+  // Handle a self-serve PayoutRequest first, then fall back to legacy Payout.
+  const payoutRequest = await prisma.payoutRequest.findFirst({
+    where: { paystackRef: transfer.reference },
+  });
+  if (payoutRequest) {
+    if (payoutRequest.status !== "processed") {
+      await prisma.payoutRequest.update({
+        where: { id: payoutRequest.id },
+        data: { status: "processed", paidAt: new Date() },
+      });
+      await publishEvent("payment.payout.completed", payoutRequest.id, {
+        providerId: payoutRequest.providerId,
+        providerUserId: payoutRequest.providerUserId,
+        amount: payoutRequest.netAmount,
+        payoutRequestId: payoutRequest.id,
+        paystackTransferRef: transfer.reference,
+      });
+    }
+    return;
+  }
+
   const payout = await prisma.payout.findFirst({
     where: { paystackRef: transfer.reference },
   });
@@ -103,4 +135,74 @@ const onTransferSuccess = async (payload: PaystackWebhookPayload) => {
 
   if (payout.status === "processed") return;
   await markPayoutProcessed(payout.id, transfer.reference);
+};
+
+const onTransferFailed = async (payload: PaystackWebhookPayload) => {
+  const transfer = payload?.data?.transfer;
+  if (!transfer?.reference) throw new AppError(400, "Missing transfer reference");
+
+  const payoutRequest = await prisma.payoutRequest.findFirst({
+    where: { paystackRef: transfer.reference },
+  });
+  if (!payoutRequest) throw new AppError(404, "No payout request found for transfer reference");
+  if (payoutRequest.status === "failed" || payoutRequest.status === "reversed") return;
+
+  // Reverse the reserved wallet debit and mark the request failed.
+  await prisma.$transaction(async (tx) => {
+    await tx.payoutRequest.update({
+      where: { id: payoutRequest.id },
+      data: { status: "failed", failedAt: new Date() },
+    });
+    const wallet = await tx.ledgerAccount.findUnique({
+      where: { type_ownerId: { type: "provider_wallet", ownerId: payoutRequest.providerId } },
+    });
+    if (wallet) {
+      await tx.ledgerEntry.create({
+        data: {
+          accountId: wallet.id,
+          counterpartyId: null,
+          type: "refund",
+          credit: payoutRequest.amount,
+          debit: 0,
+          currency: "GHS",
+          refType: "PayoutRequestReversal",
+          refId: payoutRequest.id,
+        },
+      });
+    }
+  });
+};
+
+const onTransferReversed = async (payload: PaystackWebhookPayload) => {
+  const transfer = payload?.data?.transfer;
+  if (!transfer?.reference) throw new AppError(400, "Missing transfer reference");
+
+  const payoutRequest = await prisma.payoutRequest.findFirst({
+    where: { paystackRef: transfer.reference },
+  });
+  if (!payoutRequest) throw new AppError(404, "No payout request found for transfer reference");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.payoutRequest.update({
+      where: { id: payoutRequest.id },
+      data: { status: "reversed", reversedAt: new Date() },
+    });
+    const wallet = await tx.ledgerAccount.findUnique({
+      where: { type_ownerId: { type: "provider_wallet", ownerId: payoutRequest.providerId } },
+    });
+    if (wallet) {
+      await tx.ledgerEntry.create({
+        data: {
+          accountId: wallet.id,
+          counterpartyId: null,
+          type: "refund",
+          credit: payoutRequest.amount,
+          debit: 0,
+          currency: "GHS",
+          refType: "PayoutRequestReversal",
+          refId: payoutRequest.id,
+        },
+      });
+    }
+  });
 };

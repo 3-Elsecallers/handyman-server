@@ -6,6 +6,7 @@ import { errorHandler } from "./middlewares/errorHandler.middleware";
 import { notFound } from "./middlewares/notFound.middleware";
 import { authenticateFromHeaders } from "./middlewares/authenticate.middleware";
 import { startConsumers } from "./consumers/kafkaConsumer";
+import { startSchedulers } from "./services/scheduler";
 
 const app = express();
 const PORT = process.env.PORT || 8084;
@@ -44,4 +45,5 @@ app.listen(PORT, async () => {
   await startConsumers().catch((err) => {
     console.error("[Payment] Failed to start kafka consumers:", err);
   });
+  startSchedulers();
 });

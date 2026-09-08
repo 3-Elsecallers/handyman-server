@@ -128,6 +128,133 @@ export const providerLedger = async (req: Request, res: Response) => {
   });
 };
 
+// ----- Provider wallet & payments -----
+
+export const providerWallet = async (req: Request, res: Response) => {
+  const wallet = await paymentService.getProviderWallet(req.user!.id);
+  return res.json({ success: true, data: wallet });
+};
+
+export const confirmPayment = async (req: Request, res: Response) => {
+  const payment = await paymentService.getById(param(req, "id"));
+  if (req.user?.id !== payment.providerUserId && !isAdmin(req)) {
+    throw new AppError(403, "Not authorized to confirm this payment");
+  }
+  const paymentMethod = payment.paymentMethod;
+  const result =
+    paymentMethod === "cash"
+      ? await paymentService.confirmCashPaid(payment.id, req.user!.id)
+      : await paymentService.confirmOnline(payment.id, req.user!.id);
+  return res.json({ success: true, data: result });
+};
+
+export const getPayoutMethod = async (req: Request, res: Response) => {
+  const method = await paymentService.getPayoutMethod(req.user!.id);
+  if (!method) return res.status(404).json({ success: false, message: "No payout method on file" });
+  return res.json({ success: true, data: method });
+};
+
+export const savePayoutMethod = async (req: Request, res: Response) => {
+  const { medium, network, accountName, accountNumber, bankCode, bankName, recipientCode } =
+    req.body as {
+      medium: "mobile_money" | "bank";
+      network?: string;
+      accountName: string;
+      accountNumber: string;
+      bankCode?: string;
+      bankName?: string;
+      recipientCode?: string;
+    };
+  if (!medium || !accountName || !accountNumber) {
+    throw new AppError(400, "medium, accountName and accountNumber are required");
+  }
+  const result = await paymentService.savePayoutMethod({
+    providerId: req.user!.id,
+    providerUserId: req.user!.id,
+    medium,
+    network,
+    accountName,
+    accountNumber,
+    bankCode,
+    bankName,
+    recipientCode,
+  });
+  return res.json({ success: true, data: result });
+};
+
+export const updatePayoutMethod = async (req: Request, res: Response) => {
+  const result = await paymentService.updatePayoutMethod(req.user!.id, req.body);
+  return res.json({ success: true, data: result });
+};
+
+export const deletePayoutMethod = async (req: Request, res: Response) => {
+  const result = await paymentService.deletePayoutMethod(req.user!.id, req.user!.id);
+  return res.json({ success: true, data: result });
+};
+
+export const withdraw = async (req: Request, res: Response) => {
+  const { amount } = req.body as { amount?: number };
+  if (!amount || amount <= 0) throw new AppError(400, "Valid withdrawal amount is required");
+  const result = await paymentService.withdrawForProvider({
+    providerId: req.user!.id,
+    providerUserId: req.user!.id,
+    amount: Number(amount),
+    initiatedById: req.user!.id,
+  });
+  return res.status(201).json({ success: true, data: result });
+};
+
+export const listWithdrawals = async (req: Request, res: Response) => {
+  const page = parseInt(q(req, "page") || "1", 10);
+  const limit = parseInt(q(req, "limit") || "20", 10);
+  const result = await paymentService.listProviderWithdrawals(req.user!.id, page, limit);
+  return res.json({ success: true, data: result });
+};
+
+// ----- Admin (company / ledger) -----
+
+export const adminCompanyWallet = async (req: Request, res: Response) => {
+  const wallet = await paymentService.getCompanyWallet();
+  return res.json({ success: true, data: wallet });
+};
+
+export const adminListLedger = async (req: Request, res: Response) => {
+  const data = await paymentService.listLedger({
+    accountId: q(req, "accountId"),
+    refType: q(req, "refType"),
+    providerId: q(req, "providerId"),
+    page: parseInt(q(req, "page") || "1", 10),
+    limit: parseInt(q(req, "limit") || "50", 10),
+  });
+  return res.json({ success: true, data });
+};
+
+export const adminListAccounts = async (req: Request, res: Response) => {
+  const accounts = await paymentService.listAccounts();
+  const withBalances = await Promise.all(
+    accounts.map(async (a) => ({
+      ...a,
+      balance: a.type === "provider_wallet" && a.ownerId
+        ? await paymentService.providerBalanceFor(a.ownerId)
+        : await paymentService.companyBalance(a.id),
+    })),
+  );
+  return res.json({ success: true, data: withBalances });
+};
+
+export const adminListWithdrawals = async (req: Request, res: Response) => {
+  const page = parseInt(q(req, "page") || "1", 10);
+  const limit = parseInt(q(req, "limit") || "20", 10);
+  const status = q(req, "status");
+  const skip = (page - 1) * limit;
+  const where = status ? { status: status as never } : {};
+  const [items, total] = await Promise.all([
+    prisma.payoutRequest.findMany({ where, orderBy: { createdAt: "desc" }, skip, take: limit }),
+    prisma.payoutRequest.count({ where }),
+  ]);
+  return res.json({ success: true, data: { items, total, page, limit, totalPages: Math.ceil(total / limit) } });
+};
+
 // ----- Admin -----
 
 export const adminListPayments = async (req: Request, res: Response) => {

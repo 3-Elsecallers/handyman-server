@@ -18,6 +18,7 @@ export const instantBookingSchema = z.object({
   complexity: z.enum(["standard", "moderate", "complex"]).default("standard"),
   promoCode: z.string().max(50).optional(),
   notes: z.string().max(2000).optional(),
+  paymentMethod: z.enum(["online", "cash"]).optional().default("online"),
   ...addressSchema.shape,
 });
 
@@ -28,6 +29,7 @@ export const requestBookingSchema = z.object({
   scheduledWindowEnd: z.iso.datetime(),
   complexity: z.enum(["standard", "moderate", "complex"]).default("standard"),
   description: z.string().min(1).max(4000),
+  paymentMethod: z.enum(["online", "cash"]).optional().default("online"),
   ...addressSchema.shape,
 });
 

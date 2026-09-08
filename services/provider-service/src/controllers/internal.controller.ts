@@ -23,6 +23,18 @@ export const getProviderServices = async (req: Request, res: Response, next: Nex
   }
 };
 
+export const verifyProviderServiceBookable = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await providerService.verifyProviderServiceBookable(
+      req.params.id as string,
+      req.params.serviceId as string,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const validateAvailability = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const input = validateAvailabilitySchema.parse(req.body);

@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import * as userService from "../services/userService";
-import { updateProfileSchema } from "../validation/profileValidation";
+import {
+  updateProfileSchema,
+  avatarUploadRequestSchema,
+} from "../validation/profileValidation";
 
 export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -28,6 +31,16 @@ export const uploadAvatar = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ success: false, message: "avatarUrl required" });
     }
     const result = await userService.uploadAvatar(req.user!.id, avatarUrl);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const requestAvatarUploadUrl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = avatarUploadRequestSchema.parse(req.body);
+    const result = await userService.requestAvatarUploadUrl(req.user!.id, input);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

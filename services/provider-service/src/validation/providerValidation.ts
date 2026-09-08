@@ -29,9 +29,10 @@ export const requestUploadUrlsSchema = z.object({
     .array(
       z.object({
         fileName: z.string().min(1).max(255),
-        fileSize: z.number().int().min(1).max(5 * 1024 * 1024),
-        mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
-        category: z.enum(["selfie", "ghana_card", "additional"]),
+        fileSize: z.number().int().min(1),
+        mimeType: z.string().min(1),
+        category: z.string().min(1).max(100),
+        requirementId: z.string().uuid().optional(),
       }),
     )
     .min(1)
@@ -51,3 +52,28 @@ export const confirmUploadsSchema = z.object({
 
 export type RequestUploadUrlsInput = z.infer<typeof requestUploadUrlsSchema>;
 export type ConfirmUploadsInput = z.infer<typeof confirmUploadsSchema>;
+
+export const submitAttestationsSchema = z
+  .object({
+    attestations: z
+      .array(
+        z.object({
+          requirementId: z.string().uuid(),
+          answer: z.string().min(1).max(1000),
+        }),
+      )
+      .default([]),
+    questions: z
+      .array(
+        z.object({
+          questionId: z.string().uuid(),
+          answer: z.string().min(1).max(1000),
+        }),
+      )
+      .default([]),
+  })
+  .refine((data) => data.attestations.length > 0 || data.questions.length > 0, {
+    message: "At least one attestation or question answer is required",
+  });
+
+export type SubmitAttestationsInput = z.infer<typeof submitAttestationsSchema>;

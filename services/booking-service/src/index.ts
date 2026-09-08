@@ -7,6 +7,7 @@ import { authenticateFromHeaders, requireRole } from "./middlewares/authenticate
 import { errorHandler } from "./middlewares/errorHandler.middleware";
 import { notFound } from "./middlewares/notFound.middleware";
 import { startKafkaConsumers } from "./services/kafkaConsumer";
+import { startScheduler } from "./services/scheduler";
 
 import healthRoutes from "./routes/health.route";
 import bookingRoutes from "./routes/booking.route";
@@ -45,6 +46,9 @@ app.use(errorHandler);
 startKafkaConsumers().catch((err) => {
   console.error("[Booking] Failed to start Kafka consumers:", err);
 });
+
+// Start overdue-payment scheduler
+startScheduler();
 
 app.listen(config.port, () =>
   console.log(`[Booking] Service online on port ${config.port}`),

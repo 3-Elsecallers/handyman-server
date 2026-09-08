@@ -6,5 +6,6 @@ const router = Router();
 router.get("/me", profileController.getProfile);
 router.put("/me", profileController.updateProfile);
 router.post("/me/avatar", profileController.uploadAvatar);
+router.post("/me/avatar/request-url", profileController.requestAvatarUploadUrl);
 
 export default router;

@@ -23,9 +23,19 @@ enum BookingType {
 
 enum BookingPaymentStatus {
   pending
+  accepted
+  in_progress
+  cash_outstanding
+  cash_collected
   paid
+  confirmed
   failed
   refunded
+}
+
+enum BookingPaymentMethod {
+  online
+  cash
 }
 
 enum InviteStatus {
@@ -44,6 +54,12 @@ model Booking {
   type              BookingType  @default(instant)
   status            BookingStatus @default(pending)
   paymentStatus     BookingPaymentStatus @default(pending)
+  paymentMethod     BookingPaymentMethod @default(online)
+  paymentConfirmedById String?
+  paymentConfirmedAt DateTime?
+  paymentAmountExpected Float?
+  paymentDueAt       DateTime?
+  paymentOverdue     Boolean      @default(false)
   scheduledAt       DateTime
   scheduledWindowEnd DateTime?
   completedAt       DateTime?

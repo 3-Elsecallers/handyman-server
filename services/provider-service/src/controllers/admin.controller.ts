@@ -1,6 +1,52 @@
 import { Request, Response, NextFunction } from "express";
 import * as adminService from "../services/adminService";
 import * as reviewService from "../services/reviewService";
+import * as qualityService from "../services/qualityService";
+
+export const listProviderQuality = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await qualityService.listProviderQuality(
+      {
+        grade: req.query.grade as string | undefined,
+        tier: req.query.tier as string | undefined,
+        status: req.query.status as string | undefined,
+        flagged: req.query.flagged === "true",
+      },
+      req.query.page ? parseInt(req.query.page as string) : 1,
+      req.query.limit ? parseInt(req.query.limit as string) : 20,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProviderQuality = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await qualityService.getProviderQualityDetail(req.params.id as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const recalculateProviderQuality = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await qualityService.recalculateProvider(req.params.id as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resolveQualityFlag = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await qualityService.resolveQualityFlag(req.params.flagId as string, req.user!.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const listAllProviders = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -10,6 +56,7 @@ export const listAllProviders = async (req: Request, res: Response, next: NextFu
       search: req.query.search as string | undefined,
       status: req.query.status as string | undefined,
       verificationStatus: req.query.verificationStatus as string | undefined,
+      identityStatus: req.query.identityStatus as string | undefined,
     });
     res.json({ success: true, data: result });
   } catch (error) {
@@ -48,7 +95,7 @@ export const getProviderDetail = async (req: Request, res: Response, next: NextF
 
 export const verifyProvider = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { approved, rejectionNote } = req.body;
+    const { approved, rejectionNote, overrideReason } = req.body;
     if (typeof approved !== "boolean") {
       return res.status(400).json({ success: false, message: "approved boolean required" });
     }
@@ -57,6 +104,7 @@ export const verifyProvider = async (req: Request, res: Response, next: NextFunc
       approved,
       req.user!.id,
       rejectionNote,
+      overrideReason,
     );
     res.json({ success: true, data: result });
   } catch (error) {
@@ -94,7 +142,8 @@ export const streamDocument = async (req: Request, res: Response, next: NextFunc
       "Content-Disposition",
       `inline; filename="${encodeURIComponent(doc.fileName || "document")}"`,
     );
-    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
 
     const body = result.Body as unknown as NodeJS.ReadableStream | undefined;
     if (!body) {
@@ -215,6 +264,100 @@ export const getAuditLog = async (req: Request, res: Response, next: NextFunctio
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const result = await adminService.getAuditLog(page, limit);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProviderRequirements = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminService.getProviderRequirementChecklist(req.params.id as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const reviewDocument = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { approved, rejectionReason } = req.body;
+    if (typeof approved !== "boolean") {
+      return res.status(400).json({ success: false, message: "approved boolean required" });
+    }
+    const result = await adminService.reviewDocument(
+      req.params.documentId as string,
+      approved,
+      req.user!.id,
+      rejectionReason,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProviderIdentity = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminService.getProviderIdentity(req.params.id as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const reviewIdentity = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { approved, rejectionNote } = req.body;
+    if (typeof approved !== "boolean") {
+      return res.status(400).json({ success: false, message: "approved boolean required" });
+    }
+    const result = await adminService.reviewIdentity(
+      req.params.id as string,
+      approved,
+      req.user!.id,
+      rejectionNote,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProviderServicesAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminService.getProviderServices(req.params.id as string);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProviderServiceChecklist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await adminService.getProviderServiceChecklist(
+      req.params.id as string,
+      req.params.serviceId as string,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const reviewProviderService = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { approved, rejectionNote } = req.body;
+    if (typeof approved !== "boolean") {
+      return res.status(400).json({ success: false, message: "approved boolean required" });
+    }
+    const result = await adminService.reviewService(
+      req.params.id as string,
+      req.params.serviceId as string,
+      approved,
+      req.user!.id,
+      rejectionNote,
+    );
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

@@ -1,6 +1,13 @@
 import { prisma } from "../db/prisma";
 import { AppError } from "../middlewares/errorHandler.middleware";
 import { publishEvent } from "../utils/kafka";
+import {
+  buildAvatarKey,
+  extFromMime,
+  generateUploadUrl,
+  validateAvatarFileSize,
+  validateAvatarFileType,
+} from "../config/s3";
 import type { UpdateProfileInput } from "../validation/profileValidation";
 
 export const getProfile = async (userId: string) => {
@@ -47,6 +54,28 @@ export const uploadAvatar = async (userId: string, avatarUrl: string) => {
   });
 
   return { avatarUrl: updated.avatarUrl };
+};
+
+export const requestAvatarUploadUrl = async (
+  userId: string,
+  input: { fileName: string; fileSize: number; mimeType: string },
+) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User not found");
+
+  validateAvatarFileType(input.mimeType);
+  validateAvatarFileSize(input.fileSize);
+
+  const key = buildAvatarKey(userId, extFromMime(input.mimeType));
+  const uploadUrl = await generateUploadUrl(key, input.mimeType);
+
+  return {
+    uploadUrl,
+    s3Key: key,
+    fileName: input.fileName,
+    fileSize: input.fileSize,
+    mimeType: input.mimeType,
+  };
 };
 
 export const getUserById = async (userId: string) => {

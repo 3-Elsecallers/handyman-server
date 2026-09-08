@@ -21,6 +21,11 @@ enum PaymentType {
   tip
 }
 
+enum PaymentMethod {
+  online
+  cash
+}
+
 enum RefundStatus {
   pending
   processed
@@ -31,6 +36,40 @@ enum PayoutStatus {
   pending
   processed
   failed
+  reversed
+}
+
+enum PayoutRequestStatus {
+  pending
+  processing
+  processed
+  failed
+  reversed
+}
+
+enum PayoutMedium {
+  mobile_money
+  bank
+}
+
+enum LedgerAccountType {
+  collected
+  provider_wallet
+  platform_fee
+  reserve
+}
+
+enum LedgerEntryType {
+  payment_allocated
+  platform_fee
+  cash_fee
+  hold
+  release
+  tip
+  payout
+  refund
+  company_withdrawal
+  adjustment
 }
 
 model Payment {
@@ -41,6 +80,10 @@ model Payment {
   providerUserId     String?
   type               PaymentType   @default(booking)
   status             PaymentStatus @default(pending)
+  paymentMethod      PaymentMethod @default(online)
+  providerConfirmedAt DateTime?
+  providerConfirmedById String?
+  cashCollectedAt    DateTime?
 
   amount             Float
   platformFee        Float
@@ -128,4 +171,87 @@ model WebhookEvent {
 
   @@unique([event, reference])
   @@index([reference])
+}
+
+model LedgerAccount {
+  id        String            @id @default(uuid())
+  type      LedgerAccountType
+  ownerId   String?
+  currency  String            @default("GHS")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  credits LedgerEntry[] @relation("LedgerCredits")
+  debits  LedgerEntry[] @relation("LedgerDebits")
+
+  @@unique([type, ownerId])
+  @@index([type])
+  @@index([ownerId])
+}
+
+model LedgerEntry {
+  id             String          @id @default(uuid())
+  accountId      String
+  counterpartyId String?
+  type           LedgerEntryType
+  credit         Float           @default(0)
+  debit          Float           @default(0)
+  currency       String          @default("GHS")
+  refType        String?
+  refId          String?
+  createdAt      DateTime        @default(now())
+
+  account      LedgerAccount? @relation("LedgerCredits", fields: [accountId], references: [id])
+  counterparty LedgerAccount? @relation("LedgerDebits", fields: [counterpartyId], references: [id])
+
+  @@unique([refType, refId, type, accountId])
+  @@index([accountId])
+  @@index([counterpartyId])
+  @@index([refType, refId])
+  @@index([createdAt])
+}
+
+model PayoutMethod {
+  id           String        @id @default(uuid())
+  providerId   String        @unique
+  providerUserId String
+  medium       PayoutMedium
+  network      String?
+  accountName  String?
+  accountNumberEncrypted String
+  bankCode     String?
+  bankName     String?
+  recipientCode String?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([providerId])
+  @@index([isActive])
+}
+
+model PayoutRequest {
+  id             String              @id @default(uuid())
+  providerId     String
+  providerUserId String
+  medium         PayoutMedium
+  amount         Float
+  fee            Float               @default(0)
+  netAmount      Float
+  status         PayoutRequestStatus @default(pending)
+  paystackRef    String?
+  transferCode   String?
+  recipientCode  String?
+  initiatedById  String?
+  scheduledAt    DateTime?
+  paidAt         DateTime?
+  failedAt       DateTime?
+  reversedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([providerId])
+  @@index([providerUserId])
+  @@index([status])
+  @@index([paystackRef])
 }

@@ -115,6 +115,71 @@ export const createTransfer = async (input: {
 };
 
 /**
+ * Creates a transfer recipient on Paystack so the provider wallet can be paid
+ * out. `mobile_money` takes a phone number; `nuban` takes an account number +
+ * bank code. Returns the recipient_code.
+ */
+export interface CreateTransferRecipientResult {
+  recipient_code: string;
+  active: boolean;
+  id: number;
+}
+
+export const createTransferRecipient = async (input: {
+  type: "mobile_money" | "nuban";
+  name: string;
+  account_number?: string;
+  bank_code?: string;
+  currency?: string;
+}): Promise<CreateTransferRecipientResult> => {
+  const body: Record<string, unknown> = {
+    type: input.type,
+    name: input.name,
+    currency: input.currency || config.paystack.currency,
+  };
+  if (input.type === "mobile_money") {
+    body.account_number = input.account_number;
+    body.bank_code = input.bank_code || "";
+  } else if (input.type === "nuban") {
+    body.account_number = input.account_number;
+    body.bank_code = input.bank_code;
+  }
+  return paystackRequest<CreateTransferRecipientResult>("POST", "/transferrecipient", body);
+};
+
+export type TransferFeeCode =
+  | "NGN"
+  | "USD"
+  | "GHS"
+  | "ZAR"
+  | "KES"
+  | "GHS_MTN"
+  | "GHS_VODAFONE"
+  | "GHS_TIGO"
+  | "GHS_AIRTEL";
+
+/**
+ * Returns the transfer fee in major units and the transfer amount net of fees
+ * for a given amount. Paystack typically funds the fee for GHS; we query the
+ * balance endpoint to compute fees and let the provider absorb them.
+ */
+export const getTransferFee = async (amount: number, currency = "GHS"): Promise<number> => {
+  try {
+    const data = await paystackRequest<{ fees?: Array<{ integration: number; bearer: string; currency: string }> }>(
+      "GET",
+      `/balance?currency=${encodeURIComponent(currency)}`,
+    );
+    if (Array.isArray(data.fees) && data.fees.length > 0) {
+      return data.fees[0].integration; // in minor units
+    }
+  } catch {
+    // Fall through to a default fee estimate when paystack is unreachable.
+  }
+  // Default GHS transfer fee heuristic at 1.5%.
+  return Math.round(amount * 0.015 * 100) / 100;
+};
+
+/**
  * Verifies a Paystack webhook signature. Paystack signs the raw request body
  * with an HMAC-SHA512 using the webhook/secret key.
  */

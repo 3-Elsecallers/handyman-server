@@ -1,12 +1,23 @@
 import { Request, Response, NextFunction } from "express";
 import * as providerService from "../services/providerService";
+import * as qualityService from "../services/qualityService";
 import {
   updateProfileSchema,
   addServiceSchema,
   updateServiceSchema,
   requestUploadUrlsSchema,
   confirmUploadsSchema,
+  submitAttestationsSchema,
 } from "../validation/providerValidation";
+
+export const getMyScorecard = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await qualityService.getScorecard(req.user!.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -156,6 +167,85 @@ export const streamTestImage = async (req: Request, res: Response, next: NextFun
     }
 
     (body as NodeJS.ReadableStream).pipe(res);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyRequirements = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const serviceId = req.query.serviceId as string | undefined;
+    const result = await providerService.getMyRequirements(req.user!.id, serviceId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyQuestions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const serviceId = req.query.serviceId as string | undefined;
+    const result = await providerService.getMyQuestions(req.user!.id, serviceId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyIdentity = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await providerService.getMyIdentity(req.user!.id);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const submitServiceForReview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await providerService.submitServiceForReview(
+      req.user!.id,
+      req.params.serviceId as string,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const submitAttestations = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = submitAttestationsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const result = await providerService.submitAttestations(
+      req.user!.id,
+      parsed.data,
+      (req.query.serviceId as string | undefined),
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAttestation = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { answer } = req.body;
+    if (!answer || typeof answer !== "string") {
+      return res.status(400).json({ success: false, message: "answer string required" });
+    }
+    const result = await providerService.updateAttestation(
+      req.user!.id,
+      req.params.id as string,
+      answer,
+    );
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
