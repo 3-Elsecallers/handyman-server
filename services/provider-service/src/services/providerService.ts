@@ -85,61 +85,83 @@ export const addService = async (userId: string, input: AddServiceInput) => {
   });
   if (existing) throw new AppError(409, "Service already added");
 
-  const complete = await checkServiceCompletenessInternal(profile.id, service.categoryId);
-
-  const status: "not_submitted" | "pending_review" | "approved" =
-    complete ? "approved" : "not_submitted";
-
-  const identityApproved = profile.identityStatus === "approved";
-  const isActive = identityApproved && status === "approved";
-
   const ps = await prisma.providerService.create({
     data: {
       providerId: profile.id,
       serviceId: input.serviceId,
       customPrice: input.customPrice,
-      isActive,
-      status,
+      isActive: false,
+      status: "not_submitted",
     },
     include: { service: true },
   });
 
-  if (isActive) {
-    await recomputeProviderVerificationStatus(profile.id);
-  }
-
   return {
     ...ps,
-    missingRequirements: complete ? undefined : ["Complete service requirements and submit for review"],
+    missingRequirements: ["Complete service requirements and submit for review"],
   };
 };
 
 const checkServiceCompletenessInternal = async (
   providerId: string,
   categoryId: string,
+  providerServiceId?: string,
 ): Promise<boolean> => {
   const requirements = await prisma.categoryVettingRequirement.findMany({
     where: { categoryId, isActive: true, isRequired: true },
   });
 
-  if (requirements.length === 0) return true;
+  if (requirements.length > 0) {
+    const approvedDocs = new Set(
+      (await prisma.providerDocument.findMany({
+        where: { providerId, requirementId: { not: null }, status: "approved" },
+      })).filter((d) => d.requirementId).map((d) => d.requirementId),
+    );
+    const answeredReqIds = new Set(
+      (await prisma.providerAttestation.findMany({
+        where: { providerId, requirementId: { not: null } },
+      })).map((a) => a.requirementId),
+    );
 
-  const approvedDocs = new Set(
-    (await prisma.providerDocument.findMany({
-      where: { providerId, requirementId: { not: null }, status: "approved" },
-    })).filter((d) => d.requirementId).map((d) => d.requirementId),
-  );
-  const answeredReqIds = new Set(
-    (await prisma.providerAttestation.findMany({
-      where: { providerId, requirementId: { not: null } },
-    })).map((a) => a.requirementId),
-  );
+    for (const req of requirements) {
+      if (req.type === "document" || req.type === "certification") {
+        if (!approvedDocs.has(req.id)) return false;
+      } else if (req.type === "attestation") {
+        if (!answeredReqIds.has(req.id)) return false;
+      }
+    }
+  }
 
-  for (const req of requirements) {
-    if (req.type === "document" || req.type === "certification") {
-      if (!approvedDocs.has(req.id)) return false;
-    } else if (req.type === "attestation") {
-      if (!answeredReqIds.has(req.id)) return false;
+  if (providerServiceId) {
+    const ps = await prisma.providerService.findUnique({
+      where: { id: providerServiceId },
+      include: { service: true },
+    });
+    if (!ps) throw new AppError(404, "Service offering not found");
+
+    const serviceRequirements = await prisma.serviceVettingRequirement.findMany({
+      where: { serviceId: ps.serviceId, isActive: true, isRequired: true },
+    });
+
+    if (serviceRequirements.length > 0) {
+      const serviceDocs = new Set(
+        (await prisma.providerDocument.findMany({
+          where: { providerId, serviceRequirementId: { not: null }, status: "approved" },
+        })).filter((d) => d.serviceRequirementId).map((d) => d.serviceRequirementId),
+      );
+      const answeredServiceReqIds = new Set(
+        (await prisma.providerAttestation.findMany({
+          where: { providerId, serviceRequirementId: { not: null } },
+        })).map((a) => a.serviceRequirementId),
+      );
+
+      for (const req of serviceRequirements) {
+        if (req.type === "document" || req.type === "certification") {
+          if (!serviceDocs.has(req.id)) return false;
+        } else if (req.type === "attestation") {
+          if (!answeredServiceReqIds.has(req.id)) return false;
+        }
+      }
     }
   }
 
@@ -294,10 +316,25 @@ export const requestDocumentUploadUrls = async (
 
   for (const file of input.files) {
     let requirementId: string | null = null;
+    let serviceRequirementId: string | null = null;
     let maxFileSizeMb = 10;
     let acceptedMimeTypes: string[] = [];
 
-    if (file.requirementId) {
+    if (file.serviceRequirementId) {
+      const req = await prisma.serviceVettingRequirement.findUnique({
+        where: { id: file.serviceRequirementId },
+      });
+      if (!req) throw new AppError(404, `Service requirement not found: ${file.serviceRequirementId}`);
+      const ps = await prisma.providerService.findFirst({
+        where: { providerId: profile.id, serviceId: req.serviceId },
+      });
+      if (!ps) {
+        throw new AppError(403, "This requirement does not apply to any of your services");
+      }
+      serviceRequirementId = req.id;
+      maxFileSizeMb = req.maxFileSizeMb;
+      acceptedMimeTypes = req.acceptedMimeTypes;
+    } else if (file.requirementId) {
       const req = await prisma.categoryVettingRequirement.findUnique({
         where: { id: file.requirementId },
       });
@@ -334,6 +371,7 @@ export const requestDocumentUploadUrls = async (
         providerId: profile.id,
         category: file.category,
         requirementId,
+        serviceRequirementId,
         s3Key,
         fileName: file.fileName,
         fileSize: file.fileSize,
@@ -398,6 +436,11 @@ export const confirmDocumentUploads = async (
         identityStatus: "pending_review",
         identityRejectionNote: null,
       },
+    });
+
+    await publishEvent("provider.identity.verification.requested", profile.id, {
+      providerId: profile.id,
+      userId,
     });
   }
 
@@ -506,6 +549,7 @@ export const getMyRequirements = async (userId: string, serviceId?: string) => {
     if (req.type === "attestation") {
       return {
         id: req.id,
+        scope: "category" as const,
         categoryId: req.categoryId,
         categoryName: categoryMap.get(req.categoryId) || "",
         type: req.type,
@@ -523,6 +567,7 @@ export const getMyRequirements = async (userId: string, serviceId?: string) => {
 
     return {
       id: req.id,
+      scope: "category" as const,
       categoryId: req.categoryId,
       categoryName: categoryMap.get(req.categoryId) || "",
       type: req.type,
@@ -540,8 +585,74 @@ export const getMyRequirements = async (userId: string, serviceId?: string) => {
     };
   });
 
+  const serviceIds = providerServices.map((ps) => ps.serviceId);
+  const serviceRequirements = await prisma.serviceVettingRequirement.findMany({
+    where: { serviceId: { in: serviceIds }, isActive: true },
+    orderBy: [{ serviceId: "asc" }, { sortOrder: "asc" }],
+  });
+
+  const serviceMap = new Map(
+    providerServices.map((ps) => [
+      ps.serviceId,
+      { categoryName: ps.service.category.name, serviceName: ps.service.name },
+    ]),
+  );
+
+  const serviceDocByReqId = (reqId: string) =>
+    providerDocs.find((d) => d.serviceRequirementId === reqId);
+  const serviceAttMap = new Map(
+    providerAttestations.filter((a) => a.serviceRequirementId).map((a) => [a.serviceRequirementId, a]),
+  );
+
+  const enrichedServiceReqs = serviceRequirements.map((req) => {
+    const doc = serviceDocByReqId(req.id);
+    const att = serviceAttMap.get(req.id);
+    const svcInfo = serviceMap.get(req.serviceId) || { categoryName: "", serviceName: "" };
+
+    if (req.type === "attestation") {
+      return {
+        id: req.id,
+        scope: "service" as const,
+        serviceId: req.serviceId,
+        serviceName: svcInfo.serviceName,
+        categoryName: svcInfo.categoryName,
+        type: req.type,
+        name: req.name,
+        description: req.description,
+        isRequired: req.isRequired,
+        acceptedMimeTypes: req.acceptedMimeTypes,
+        maxFileSizeMb: req.maxFileSizeMb,
+        sortOrder: req.sortOrder,
+        submissionStatus: att ? "submitted" : null,
+        answer: att?.answer || null,
+        attestationId: att?.id || null,
+      };
+    }
+
+    return {
+      id: req.id,
+      scope: "service" as const,
+      serviceId: req.serviceId,
+      serviceName: svcInfo.serviceName,
+      categoryName: svcInfo.categoryName,
+      type: req.type,
+      name: req.name,
+      description: req.description,
+      isRequired: req.isRequired,
+      acceptedMimeTypes: req.acceptedMimeTypes,
+      maxFileSizeMb: req.maxFileSizeMb,
+      sortOrder: req.sortOrder,
+      submissionStatus: doc?.status || null,
+      documentId: doc?.id || null,
+      mimeType: doc?.mimeType || null,
+      fileName: doc?.fileName || null,
+      rejectionReason: doc?.rejectionReason || null,
+    };
+  });
+
   return {
     requirements: enriched,
+    serviceRequirements: enrichedServiceReqs,
     providerVerificationStatus: profile.verificationStatus,
     identityStatus: profile.identityStatus,
   };
@@ -577,7 +688,7 @@ export const getMyQuestions = async (userId: string, serviceId?: string) => {
   });
 
   const providerAttestations = await prisma.providerAttestation.findMany({
-    where: { providerId: profile.id, questionId: { not: null } },
+    where: { providerId: profile.id, questionId: { not: null }, serviceQuestionId: null },
   });
 
   const answerMap = new Map(providerAttestations.map((a) => [a.questionId, a]));
@@ -586,6 +697,7 @@ export const getMyQuestions = async (userId: string, serviceId?: string) => {
     const ans = answerMap.get(q.id);
     return {
       id: q.id,
+      scope: "category" as const,
       categoryId: q.categoryId,
       categoryName: categoryMap.get(q.categoryId) || "",
       question: q.question,
@@ -598,7 +710,44 @@ export const getMyQuestions = async (userId: string, serviceId?: string) => {
     };
   });
 
-  return { questions: enriched };
+  const serviceIds = providerServices.map((ps) => ps.serviceId);
+  const serviceQuestions = await prisma.serviceQuestion.findMany({
+    where: { serviceId: { in: serviceIds }, isActive: true },
+    orderBy: [{ serviceId: "asc" }, { sortOrder: "asc" }],
+  });
+
+  const serviceMap = new Map(
+    providerServices.map((ps) => [
+      ps.serviceId,
+      { categoryName: ps.service.category.name, serviceName: ps.service.name },
+    ]),
+  );
+
+  const serviceAnswers = await prisma.providerAttestation.findMany({
+    where: { providerId: profile.id, serviceQuestionId: { not: null } },
+  });
+  const serviceAnswerMap = new Map(serviceAnswers.map((a) => [a.serviceQuestionId, a]));
+
+  const enrichedServiceQs = serviceQuestions.map((q) => {
+    const ans = serviceAnswerMap.get(q.id);
+    const svcInfo = serviceMap.get(q.serviceId) || { categoryName: "", serviceName: "" };
+    return {
+      id: q.id,
+      scope: "service" as const,
+      serviceId: q.serviceId,
+      serviceName: svcInfo.serviceName,
+      categoryName: svcInfo.categoryName,
+      question: q.question,
+      type: q.type,
+      options: q.options,
+      isRequired: q.isRequired,
+      sortOrder: q.sortOrder,
+      answer: ans?.answer || null,
+      answerId: ans?.id || null,
+    };
+  });
+
+  return { questions: enriched, serviceQuestions: enrichedServiceQs };
 };
 
 export const submitAttestations = async (
@@ -616,6 +765,9 @@ export const submitAttestations = async (
   const allowedCategoryIds = new Set(
     providerServiceCategoryIds.map((ps) => ps.service.categoryId),
   );
+  const allowedServiceIds = new Set(
+    providerServiceCategoryIds.map((ps) => ps.serviceId),
+  );
 
   let serviceCategoryId: string | null = null;
   let targetServiceId: string | null = null;
@@ -630,8 +782,22 @@ export const submitAttestations = async (
   }
 
   for (const att of input.attestations) {
+    if (att.serviceRequirementId) {
+      const req = await prisma.serviceVettingRequirement.findUnique({
+        where: { id: att.serviceRequirementId },
+      });
+      if (!req) throw new AppError(404, `Service requirement not found: ${att.serviceRequirementId}`);
+      if (!allowedServiceIds.has(req.serviceId)) {
+        throw new AppError(403, "This service requirement does not apply to any of your services");
+      }
+      if (req.type !== "attestation") {
+        throw new AppError(400, "Only attestation-type requirements can be answered here");
+      }
+      continue;
+    }
+
     const req = await prisma.categoryVettingRequirement.findUnique({
-      where: { id: att.requirementId },
+      where: { id: att.requirementId! },
     });
     if (!req) throw new AppError(404, `Requirement not found: ${att.requirementId}`);
     if (!allowedCategoryIds.has(req.categoryId)) {
@@ -646,7 +812,18 @@ export const submitAttestations = async (
   }
 
   for (const q of input.questions) {
-    const question = await prisma.categoryQuestion.findUnique({ where: { id: q.questionId } });
+    if (q.serviceQuestionId) {
+      const question = await prisma.serviceQuestion.findUnique({
+        where: { id: q.serviceQuestionId },
+      });
+      if (!question) throw new AppError(404, `Service question not found: ${q.serviceQuestionId}`);
+      if (!allowedServiceIds.has(question.serviceId)) {
+        throw new AppError(403, "This service question does not apply to any of your services");
+      }
+      continue;
+    }
+
+    const question = await prisma.categoryQuestion.findUnique({ where: { id: q.questionId! } });
     if (!question) throw new AppError(404, `Question not found: ${q.questionId}`);
     if (!allowedCategoryIds.has(question.categoryId)) {
       throw new AppError(403, "This question does not apply to your service categories");
@@ -659,8 +836,38 @@ export const submitAttestations = async (
   const results: Array<{ id: string; type: string }> = [];
 
   for (const att of input.attestations) {
+    if (att.serviceRequirementId) {
+      const existing = await prisma.providerAttestation.findUnique({
+        where: {
+          providerId_serviceRequirementId: {
+            providerId: profile.id,
+            serviceRequirementId: att.serviceRequirementId,
+          },
+        },
+      });
+
+      if (existing) {
+        const updated = await prisma.providerAttestation.update({
+          where: { id: existing.id },
+          data: { answer: att.answer, serviceId: targetServiceId ?? existing.serviceId },
+        });
+        results.push({ id: updated.id, type: "service_attestation" });
+      } else {
+        const created = await prisma.providerAttestation.create({
+          data: {
+            providerId: profile.id,
+            serviceId: targetServiceId,
+            serviceRequirementId: att.serviceRequirementId,
+            answer: att.answer,
+          },
+        });
+        results.push({ id: created.id, type: "service_attestation" });
+      }
+      continue;
+    }
+
     const existing = await prisma.providerAttestation.findUnique({
-      where: { providerId_requirementId: { providerId: profile.id, requirementId: att.requirementId } },
+      where: { providerId_requirementId: { providerId: profile.id, requirementId: att.requirementId! } },
     });
 
     if (existing) {
@@ -674,7 +881,7 @@ export const submitAttestations = async (
         data: {
           providerId: profile.id,
           serviceId: targetServiceId,
-          requirementId: att.requirementId,
+          requirementId: att.requirementId!,
           answer: att.answer,
         },
       });
@@ -683,8 +890,38 @@ export const submitAttestations = async (
   }
 
   for (const q of input.questions) {
+    if (q.serviceQuestionId) {
+      const existing = await prisma.providerAttestation.findUnique({
+        where: {
+          providerId_serviceQuestionId: {
+            providerId: profile.id,
+            serviceQuestionId: q.serviceQuestionId,
+          },
+        },
+      });
+
+      if (existing) {
+        const updated = await prisma.providerAttestation.update({
+          where: { id: existing.id },
+          data: { answer: q.answer, serviceId: targetServiceId ?? existing.serviceId },
+        });
+        results.push({ id: updated.id, type: "service_question" });
+      } else {
+        const created = await prisma.providerAttestation.create({
+          data: {
+            providerId: profile.id,
+            serviceId: targetServiceId,
+            serviceQuestionId: q.serviceQuestionId,
+            answer: q.answer,
+          },
+        });
+        results.push({ id: created.id, type: "service_question" });
+      }
+      continue;
+    }
+
     const existing = await prisma.providerAttestation.findUnique({
-      where: { providerId_questionId: { providerId: profile.id, questionId: q.questionId } },
+      where: { providerId_questionId: { providerId: profile.id, questionId: q.questionId! } },
     });
 
     if (existing) {
@@ -698,7 +935,7 @@ export const submitAttestations = async (
         data: {
           providerId: profile.id,
           serviceId: targetServiceId,
-          questionId: q.questionId,
+          questionId: q.questionId!,
           answer: q.answer,
         },
       });
@@ -758,7 +995,11 @@ export const submitServiceForReview = async (userId: string, providerServiceId: 
   });
   if (!ps) throw new AppError(404, "Service offering not found");
 
-  const complete = await checkServiceCompletenessInternal(profile.id, ps.service.categoryId);
+  const complete = await checkServiceCompletenessInternal(
+    profile.id,
+    ps.service.categoryId,
+    ps.id,
+  );
   if (!complete) {
     throw new AppError(
       400,

@@ -472,6 +472,7 @@ export const reviewIdentity = async (
 
   await publishEvent(approved ? "provider.identity.verified" : "provider.identity.rejected", providerId, {
     providerId,
+    userId: updated.userId,
     adminId,
     rejectionNote: approved ? undefined : rejectionNote?.trim(),
   });
@@ -563,6 +564,7 @@ export const reviewService = async (
 
   await publishEvent(approved ? "provider.service.verified" : "provider.service.rejected", providerId, {
     providerId,
+    userId: profile.userId,
     providerServiceId,
     serviceId: ps.serviceId,
     adminId,

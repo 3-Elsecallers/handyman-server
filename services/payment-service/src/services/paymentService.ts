@@ -153,6 +153,10 @@ export const initializeForBooking = async (
   paymentMethodInput?: "online" | "cash",
 ) => {
   const booking = await fetchBooking(bookingId);
+  // Payments may only be opened after the provider marks the service complete.
+  if (booking.status !== "completed") {
+    throw new AppError(409, "Payment can only be initialized after the service is completed");
+  }
   const existing = await getByBooking(bookingId, "booking");
   if (existing) {
     return normalizePayment(existing);

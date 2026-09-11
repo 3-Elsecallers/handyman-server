@@ -16,7 +16,5 @@ router.put("/:id/confirm", requireRole("provider"), bookingController.confirmBoo
 router.put("/:id/decline", requireRole("provider"), bookingController.declineBooking);
 router.put("/:id/start", requireRole("provider"), bookingController.startBooking);
 router.put("/:id/complete", requireRole("provider"), bookingController.completeBooking);
-router.put("/:id/mark-paid", bookingController.markPaid);
-router.put("/:id/confirm-cash", requireRole("provider"), bookingController.confirmCash);
 
 export default router;

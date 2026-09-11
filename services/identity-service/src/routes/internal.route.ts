@@ -8,6 +8,7 @@ router.use(serviceAuth);
 
 router.post("/users/validate", internalController.validateUser);
 router.get("/users/batch", internalController.batchGetUsers);
+router.get("/users/by-role/:role", internalController.getUsersByRole);
 router.get("/users/search", internalController.searchUsers);
 router.get("/users/:id", internalController.getUserById);
 router.get("/users/:id/notification-prefs", internalController.getNotificationPrefs);

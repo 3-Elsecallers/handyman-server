@@ -27,6 +27,7 @@ interface UserSuspendedEvent {
 interface PaymentConfirmedEvent {
   bookingId: string;
   paymentMethod?: string;
+  paymentStatus?: string;
   confirmedById?: string;
 }
 
@@ -60,10 +61,11 @@ export const startKafkaConsumers = async () => {
   await createConsumer("payment.confirmed", async (value) => {
     const event = value as unknown as PaymentConfirmedEvent;
     if (!event.bookingId) return;
+    const paymentStatus = event.paymentStatus === "cash_collected" ? "cash_collected" : "confirmed";
     await prisma.booking.updateMany({
       where: { id: event.bookingId },
       data: {
-        paymentStatus: "confirmed",
+        paymentStatus,
         ...(event.confirmedById
           ? {
               paymentConfirmedById: event.confirmedById,
@@ -112,6 +114,10 @@ export const startKafkaConsumers = async () => {
         });
         await publishEvent("booking.cancelled", booking.id, {
           bookingId: booking.id,
+          customerId: booking.customerId,
+          providerId: booking.providerId,
+          providerUserId: booking.providerUserId,
+          priorStatus: booking.status,
           cancelledBy: "system",
           cancelledByRole: "system",
           reason: "Provider no longer available",
@@ -154,6 +160,10 @@ export const startKafkaConsumers = async () => {
       });
       await publishEvent("booking.cancelled", booking.id, {
         bookingId: booking.id,
+        customerId: booking.customerId,
+        providerId: booking.providerId,
+        providerUserId: booking.providerUserId,
+        priorStatus: booking.status,
         cancelledBy: "system",
         cancelledByRole: "system",
         reason: "Account suspended",

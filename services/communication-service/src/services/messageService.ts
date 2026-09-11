@@ -19,8 +19,13 @@ export const sendMessage = async (
     data: { lastMessageAt: message.createdAt },
   });
 
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { bookingId: true },
+  });
+
   await publishEvent("message.sent", message.id, {
-    bookingId: conversationId,
+    bookingId: conversation?.bookingId,
     messageId: message.id,
     senderId,
     type,

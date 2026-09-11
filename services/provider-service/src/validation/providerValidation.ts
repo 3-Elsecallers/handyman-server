@@ -33,6 +33,7 @@ export const requestUploadUrlsSchema = z.object({
         mimeType: z.string().min(1),
         category: z.string().min(1).max(100),
         requirementId: z.string().uuid().optional(),
+        serviceRequirementId: z.string().uuid().optional(),
       }),
     )
     .min(1)
@@ -57,18 +58,30 @@ export const submitAttestationsSchema = z
   .object({
     attestations: z
       .array(
-        z.object({
-          requirementId: z.string().uuid(),
-          answer: z.string().min(1).max(1000),
-        }),
+        z
+          .object({
+            requirementId: z.string().uuid().optional(),
+            serviceRequirementId: z.string().uuid().optional(),
+            answer: z.string().min(1).max(1000),
+          })
+          .refine(
+            (item) => !!item.requirementId || !!item.serviceRequirementId,
+            { message: "Each attestation must reference a requirement or a service requirement" },
+          ),
       )
       .default([]),
     questions: z
       .array(
-        z.object({
-          questionId: z.string().uuid(),
-          answer: z.string().min(1).max(1000),
-        }),
+        z
+          .object({
+            questionId: z.string().uuid().optional(),
+            serviceQuestionId: z.string().uuid().optional(),
+            answer: z.string().min(1).max(1000),
+          })
+          .refine(
+            (item) => !!item.questionId || !!item.serviceQuestionId,
+            { message: "Each question answer must reference a question or a service question" },
+          ),
       )
       .default([]),
   })

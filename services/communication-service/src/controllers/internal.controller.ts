@@ -22,5 +22,8 @@ export const sendNotification = async (req: Request, res: Response) => {
     body,
     data,
   );
+  if (!notification) {
+    return res.status(200).json({ success: true, data: null, skipped: true });
+  }
   res.status(201).json({ success: true, data: notification });
 };

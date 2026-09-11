@@ -42,6 +42,14 @@ router.get("/services/categories/:id/questions", vettingController.listQuestions
 router.post("/services/categories/:id/questions", vettingController.createQuestion);
 router.put("/questions/:id", vettingController.updateQuestion);
 router.delete("/questions/:id", vettingController.deleteQuestion);
+router.get("/services/:id/service-requirements", vettingController.listServiceRequirements);
+router.post("/services/:id/service-requirements", vettingController.createServiceRequirement);
+router.put("/service-requirements/:id", vettingController.updateServiceRequirement);
+router.delete("/service-requirements/:id", vettingController.deleteServiceRequirement);
+router.get("/services/:id/service-questions", vettingController.listServiceQuestions);
+router.post("/services/:id/service-questions", vettingController.createServiceQuestion);
+router.put("/service-questions/:id", vettingController.updateServiceQuestion);
+router.delete("/service-questions/:id", vettingController.deleteServiceQuestion);
 router.get("/reviews/moderation", adminController.getFlaggedReviews);
 router.put("/reviews/:id/moderate", adminController.moderateReview);
 router.get("/audit-log", adminController.getAuditLog);

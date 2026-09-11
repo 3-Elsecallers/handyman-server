@@ -13,18 +13,33 @@ enum NotificationChannel {
   sms
 }
 
+enum NotificationStatus {
+  pending
+  delivered
+  failed
+}
+
 enum NotificationType {
   booking_confirmed
+  booking_cancelled
   booking_reminder_24h
   booking_reminder_1h
   provider_en_route
+  booking_started
   booking_completed
+  booking_reassigned
   new_review
   payment_received
   payment_refunded
+  payment_reminder
   dispute_opened
   verification_result
   marketing
+  admin_new_signup
+  admin_identity_verification_request
+  admin_service_verification_request
+  admin_new_booking
+  admin_booking_cancelled
 }
 
 model Conversation {
@@ -60,19 +75,23 @@ model Message {
 }
 
 model Notification {
-  id        String              @id @default(uuid())
-  userId    String
-  type      NotificationType
-  channel   NotificationChannel
-  title     String
-  body      String
-  data      Json?
-  readAt    DateTime?
-  sentAt    DateTime            @default(now())
-  createdAt DateTime            @default(now())
+  id               String              @id @default(uuid())
+  userId           String
+  type             NotificationType
+  channel          NotificationChannel
+  status           NotificationStatus  @default(pending)
+  deliveryAttempts Int                 @default(0)
+  lastDeliveryAt   DateTime?
+  title            String
+  body             String
+  data             Json?
+  readAt           DateTime?
+  sentAt           DateTime            @default(now())
+  createdAt        DateTime            @default(now())
 
   @@index([userId, readAt])
   @@index([userId, type])
+  @@index([status, createdAt])
 }
 
 model DeviceToken {

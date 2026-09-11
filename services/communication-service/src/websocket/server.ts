@@ -22,7 +22,7 @@ const clients = new Map<string, AuthenticatedSocket>();
 
 function authenticateToken(token: string): IUserPayload | null {
   try {
-    const payload = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET || "") as IUserPayload;
+    const payload = jwt.verify(token, config.accessTokenSecret) as IUserPayload;
     return payload;
   } catch {
     return null;
@@ -203,4 +203,14 @@ async function handleWSMessage(ws: AuthenticatedSocket, msg: WSMessage) {
 export function isUserOnline(userId: string): boolean {
   const client = clients.get(userId);
   return client?.readyState === WebSocket.OPEN;
+}
+
+/** Send a JSON event to a single user if their socket is open. */
+export function sendToUser(userId: string, message: Record<string, unknown>): boolean {
+  const client = clients.get(userId);
+  if (client?.readyState === WebSocket.OPEN) {
+    client.send(JSON.stringify(message));
+    return true;
+  }
+  return false;
 }

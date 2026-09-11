@@ -6,6 +6,7 @@ const router = Router();
 router.get("/", notificationController.listNotifications);
 router.get("/unread-count", notificationController.getUnreadCount);
 router.put("/read-all", notificationController.markAllAsRead);
+router.put("/read-by-context", notificationController.markByContextAsRead);
 router.put("/:id/read", notificationController.markAsRead);
 
 export default router;

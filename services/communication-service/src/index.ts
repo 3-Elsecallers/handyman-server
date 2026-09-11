@@ -9,6 +9,7 @@ import { errorHandler } from "./middlewares/errorHandler.middleware";
 import { notFound } from "./middlewares/notFound.middleware";
 import { initWebSocket } from "./websocket/server";
 import { startKafkaConsumers } from "./services/kafkaConsumer";
+import { startNotificationSweeper } from "./services/notificationDispatcher";
 
 import healthRoutes from "./routes/health.route";
 import internalRoutes from "./routes/internal.route";
@@ -45,6 +46,9 @@ initWebSocket(server);
 startKafkaConsumers().catch((err) => {
   console.error("[Communication] Failed to start Kafka consumers:", err);
 });
+
+// Start the notification delivery sweep (stub providers, fallback chain)
+startNotificationSweeper();
 
 server.listen(config.port, () =>
   console.log(`[Communication] Service online on port ${config.port}`),

@@ -4,6 +4,7 @@ import * as conversationController from "../controllers/conversation.controller"
 const router = Router();
 
 router.get("/", conversationController.listConversations);
+router.post("/", conversationController.createConversation);
 router.get("/:id", conversationController.getConversation);
 
 export default router;

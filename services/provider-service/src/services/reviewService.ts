@@ -42,6 +42,7 @@ export const submitReview = async (
   await publishEvent("provider.review.submitted", review.id, {
     reviewId: review.id,
     providerId,
+    userId: provider.userId,
     rating,
     customerId,
     bookingId,

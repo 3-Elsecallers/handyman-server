@@ -1,7 +1,21 @@
 import { Request, Response, NextFunction } from "express";
 import * as userService from "../services/userService";
 import * as notificationPrefsService from "../services/notificationPrefsService";
+import * as adminService from "../services/adminService";
 import { prisma } from "../db/prisma";
+
+export const getUsersByRole = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const role = req.params.role as string;
+    if (!["customer", "provider", "admin"].includes(role)) {
+      return res.status(400).json({ success: false, message: "Invalid role" });
+    }
+    const { users } = await adminService.listUsers({ role, limit: 100 });
+    res.json({ success: true, data: users });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
   try {

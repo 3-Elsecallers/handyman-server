@@ -125,24 +125,6 @@ export const completeBooking = async (req: Request, res: Response, next: NextFun
   }
 };
 
-export const markPaid = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const booking = await bookingService.markPaid(req.params.id as string, req.user!);
-    res.json({ success: true, data: booking });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const confirmCash = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const booking = await bookingService.confirmCash(req.params.id as string, req.user!.id);
-    res.json({ success: true, data: booking });
-  } catch (error) {
-    next(error);
-  }
-};
-
 export const reassignBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const booking = await bookingService.reassignBooking(req.params.id as string, req.user!.id);

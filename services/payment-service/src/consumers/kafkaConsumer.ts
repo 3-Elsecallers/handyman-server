@@ -76,10 +76,12 @@ export const startConsumers = async () => {
     if (!payment) {
       await initializeForBooking(bookingId, { id: "system", role: "system", source: "internal.booking.completed" }, paymentMethod);
     }
-
+    const created = await getByBooking(bookingId, "booking");
     await publishEvent("payment.required", bookingId, {
       bookingId,
-      paymentMethod,
+      customerId: created?.customerId,
+      providerId: created?.providerId,
+      paymentMethod: created?.paymentMethod ?? paymentMethod,
       source: "booking.completed",
     });
   });

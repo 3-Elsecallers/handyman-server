@@ -48,6 +48,12 @@ export const listConversationsForUser = async (userId: string) => {
   });
 };
 
+export const getConversationByBookingId = async (bookingId: string) => {
+  return prisma.conversation.findUnique({
+    where: { bookingId },
+  });
+};
+
 export const assertUserInConversation = async (
   conversationId: string,
   userId: string,

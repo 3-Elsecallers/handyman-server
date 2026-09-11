@@ -12,6 +12,7 @@ import {
   adminListRefunds,
   adminRecordPayout,
   getPayment,
+  getPaymentByBooking,
   initializePayment,
   internalCreatePayment,
   internalGetByBooking,
@@ -44,6 +45,7 @@ const router = Router();
 
 // Customer-facing
 router.post("/initialize", initializePayment);
+router.get("/by-booking/:bookingId", getPaymentByBooking);
 router.get("/customer/payments", listCustomerPayments);
 router.get("/:id", getPayment);
 router.post("/:id/verify", verifyPayment);

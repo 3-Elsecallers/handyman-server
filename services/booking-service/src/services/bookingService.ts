@@ -285,6 +285,7 @@ export const createInstantBooking = async (
     bookingId: booking.id,
     customerId: booking.customerId,
     providerId: booking.providerId,
+    providerUserId: booking.providerUserId,
     serviceId: booking.serviceId,
     scheduledAt: booking.scheduledAt.toISOString(),
     priceQuote: booking.priceQuote,
@@ -381,6 +382,10 @@ export const createRequestBooking = async (
     bookingId: booking.id,
     customerId: booking.customerId,
     providerId: null,
+    providerUserId: null,
+    invitedProviders: booking.invites
+      .filter((i) => i.status === "pending")
+      .map((i) => i.providerUserId),
     serviceId: booking.serviceId,
     scheduledAt: booking.scheduledAt.toISOString(),
     priceQuote: booking.priceQuote,
@@ -504,6 +509,10 @@ export const declineBooking = async (
     await recordTimeline(booking.id, "cancelled", providerUserId, "provider", "Provider declined");
     await publishEvent("booking.cancelled", booking.id, {
       bookingId: booking.id,
+      customerId: booking.customerId,
+      providerId: booking.providerId,
+      providerUserId: booking.providerUserId,
+      priorStatus: "pending",
       cancelledBy: providerUserId,
       cancelledByRole: "provider",
       reason: "Provider declined",
@@ -667,88 +676,6 @@ export const completeBooking = async (bookingId: string, providerId: string) => 
   return updated;
 };
 
-export const markPaid = async (
-  bookingId: string,
-  actingUser: { id: string; role: string },
-) => {
-  const booking = await getBookingById(bookingId);
-  assertAccess(booking, actingUser);
-  if (booking.status !== "completed") {
-    throw new AppError(409, "Payment can only be marked after the service is completed");
-  }
-
-  let paymentStatus: "cash_outstanding" | "paid" = "cash_outstanding";
-  if (booking.paymentMethod === "online") {
-    paymentStatus = "paid";
-  }
-
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: { paymentStatus },
-  });
-  await recordTimeline(
-    booking.id,
-    "completed",
-    actingUser.id,
-    actingUser.role,
-    paymentStatus === "cash_outstanding"
-      ? "Customer intends to pay cash"
-      : "Customer paid online",
-  );
-
-  await publishEvent("booking.payment-required", booking.id, {
-    bookingId: booking.id,
-    customerId: booking.customerId,
-    providerId: booking.providerId,
-    paymentMethod: booking.paymentMethod,
-    paymentStatus,
-  });
-
-  return updated;
-};
-
-export const confirmCash = async (bookingId: string, providerUserId: string) => {
-  const booking = await getBookingById(bookingId);
-  assertAccess(booking, { id: providerUserId, role: "provider" });
-  if (booking.providerUserId !== providerUserId) {
-    throw new AppError(403, "Only the booking provider can confirm payment");
-  }
-  if (booking.paymentMethod !== "cash") {
-    throw new AppError(409, "Only cash bookings can be cash-confirmed");
-  }
-  if (booking.paymentStatus !== "cash_outstanding") {
-    throw new AppError(
-      409,
-      `Cannot confirm cash in payment status ${booking.paymentStatus}`,
-    );
-  }
-
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: {
-      paymentStatus: "cash_collected",
-      paymentConfirmedById: providerUserId,
-      paymentConfirmedAt: new Date(),
-    },
-  });
-  await recordTimeline(
-    booking.id,
-    "completed",
-    providerUserId,
-    "provider",
-    "Provider confirmed cash received",
-  );
-
-  await publishEvent("payment.confirmed", booking.id, {
-    bookingId: booking.id,
-    paymentMethod: "cash",
-    paymentStatus: "cash_collected",
-    confirmedById: providerUserId,
-  });
-
-  return updated;
-};
-
 export const cancelBooking = async (
   bookingId: string,
   actingUser: { id: string; role: string },
@@ -792,6 +719,10 @@ export const cancelBooking = async (
 
   await publishEvent("booking.cancelled", booking.id, {
     bookingId: booking.id,
+    customerId: booking.customerId,
+    providerId: booking.providerId,
+    providerUserId: booking.providerUserId,
+    priorStatus: booking.status,
     cancelledBy: actingUser.id,
     cancelledByRole: actingUser.role,
     reason: reason || undefined,

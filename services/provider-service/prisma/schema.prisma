@@ -185,11 +185,53 @@ model Service {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  category         ServiceCategory   @relation(fields: [categoryId], references: [id])
-  providerServices ProviderService[]
+  category             ServiceCategory          @relation(fields: [categoryId], references: [id])
+  providerServices     ProviderService[]
+  serviceRequirements  ServiceVettingRequirement[]
+  serviceQuestions     ServiceQuestion[]
 
   @@index([categoryId])
   @@index([slug])
+}
+
+model ServiceVettingRequirement {
+  id                String         @id @default(uuid())
+  serviceId         String
+  type              RequirementType
+  name              String
+  description       String?
+  isRequired        Boolean        @default(true)
+  acceptedMimeTypes String[]
+  maxFileSizeMb     Int            @default(10)
+  sortOrder         Int            @default(0)
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  service      Service              @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  documents    ProviderDocument[]
+  attestations ProviderAttestation[]
+
+  @@unique([serviceId, name])
+  @@index([serviceId])
+}
+
+model ServiceQuestion {
+  id         String       @id @default(uuid())
+  serviceId  String
+  question   String
+  type       QuestionType
+  options    String[]
+  isRequired Boolean      @default(true)
+  sortOrder  Int          @default(0)
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  service      Service              @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  attestations ProviderAttestation[]
+
+  @@index([serviceId])
 }
 
 model CategoryVettingRequirement {
@@ -233,22 +275,28 @@ model CategoryQuestion {
 }
 
 model ProviderAttestation {
-  id            String   @id @default(uuid())
-  providerId    String
-  serviceId     String?
-  requirementId String?
-  questionId    String?
-  answer        String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  providerId           String
+  serviceId            String?
+  requirementId        String?
+  questionId           String?
+  serviceRequirementId String?
+  serviceQuestionId    String?
+  answer               String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  provider   ProviderProfile          @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  service    ProviderService?         @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  requirement CategoryVettingRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
-  question    CategoryQuestion?        @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  provider           ProviderProfile               @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  service            ProviderService?              @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  requirement        CategoryVettingRequirement?   @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  question           CategoryQuestion?             @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  serviceRequirement ServiceVettingRequirement?    @relation(fields: [serviceRequirementId], references: [id], onDelete: SetNull)
+  serviceQuestion    ServiceQuestion?              @relation(fields: [serviceQuestionId], references: [id], onDelete: SetNull)
 
   @@unique([providerId, requirementId])
   @@unique([providerId, questionId])
+  @@unique([providerId, serviceRequirementId])
+  @@unique([providerId, serviceQuestionId])
   @@index([providerId])
   @@index([serviceId])
 }
@@ -301,25 +349,28 @@ model Review {
 }
 
 model ProviderDocument {
-  id              String         @id @default(uuid())
-  providerId      String
-  requirementId   String?
-  category        String
-  s3Key           String
-  fileName        String
-  fileSize        Int
-  mimeType        String
-  status          DocumentStatus @default(uploaded)
-  rejectionReason String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                   String         @id @default(uuid())
+  providerId           String
+  requirementId        String?
+  serviceRequirementId String?
+  category             String
+  s3Key                String
+  fileName             String
+  fileSize             Int
+  mimeType             String
+  status               DocumentStatus @default(uploaded)
+  rejectionReason      String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
-  provider   ProviderProfile          @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  requirement CategoryVettingRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  provider         ProviderProfile          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  requirement      CategoryVettingRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  serviceRequirement ServiceVettingRequirement? @relation(fields: [serviceRequirementId], references: [id], onDelete: SetNull)
 
   @@index([providerId, category])
   @@index([providerId, status])
   @@index([providerId, requirementId])
+  @@index([providerId, serviceRequirementId])
 }
 
 model AuditLog {

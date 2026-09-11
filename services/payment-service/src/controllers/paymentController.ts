@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { PayoutStatus } from "../../generated/prisma";
 import { AppError } from "../middlewares/errorHandler.middleware";
 import * as paymentService from "../services/paymentService";
+import { fetchBooking } from "../utils/serviceClient";
 import { processWebhook } from "../services/webhookService";
 import { verifyWebhookSignature, verifyTransaction } from "../utils/paystack";
 
@@ -36,12 +37,24 @@ export const initializePayment = async (req: Request, res: Response) => {
   const { bookingId } = req.body as { bookingId?: string };
   if (!bookingId) throw new AppError(400, "bookingId is required");
 
+  const booking = await fetchBooking(bookingId);
+  if (!isAdmin(req) && req.user?.id !== booking.customerId) {
+    throw new AppError(403, "Not authorized to initialize payment for this booking");
+  }
+
   const payment = await paymentService.initializeForBooking(bookingId, {
     id: req.user?.id,
     role: req.user?.role,
     source: "customer.initialize",
   });
   return res.status(201).json({ success: true, data: payment });
+};
+
+export const getPaymentByBooking = async (req: Request, res: Response) => {
+  const payment = await paymentService.getByBooking(param(req, "bookingId"), "booking");
+  if (!payment) throw new AppError(404, "Payment not found for booking");
+  verifyOwnership(req, payment);
+  return res.json({ success: true, data: payment });
 };
 
 export const getPayment = async (req: Request, res: Response) => {
