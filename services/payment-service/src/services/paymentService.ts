@@ -5,7 +5,7 @@ import { AppError } from "../middlewares/errorHandler.middleware";
 import { publishEvent } from "../utils/kafka";
 import { fetchBooking, fetchUser } from "../utils/serviceClient";
 import * as paystack from "../utils/paystack";
-import { encryptString } from "../utils/encryption";
+import { encryptString, decryptString } from "../utils/encryption";
 import {
   postOnlineAllocation,
   postCashFee,
@@ -720,6 +720,26 @@ export const getProviderWallet = async (providerUserId: string) => {
 
 export const getPayoutMethod = async (providerId: string) => {
   return prisma.payoutMethod.findUnique({ where: { providerId } });
+};
+
+export const maskAccountNumber = (encrypted: string | null): string | null => {
+  if (!encrypted) return null;
+  try {
+    const raw = decryptString(encrypted).trim();
+    return raw.length >= 4 ? `•••• ${raw.slice(-4)}` : "••••";
+  } catch {
+    return null;
+  }
+};
+
+export const toSafePayoutMethod = <T extends { accountNumberEncrypted: string | null }>(
+  method: T,
+) => {
+  const { accountNumberEncrypted, ...rest } = method;
+  return {
+    ...rest,
+    maskedAccountNumber: maskAccountNumber(accountNumberEncrypted),
+  };
 };
 
 export const savePayoutMethod = async (input: {

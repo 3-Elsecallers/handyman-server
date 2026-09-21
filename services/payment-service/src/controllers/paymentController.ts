@@ -164,7 +164,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 export const getPayoutMethod = async (req: Request, res: Response) => {
   const method = await paymentService.getPayoutMethod(req.user!.id);
   if (!method) return res.status(404).json({ success: false, message: "No payout method on file" });
-  return res.json({ success: true, data: method });
+  return res.json({ success: true, data: paymentService.toSafePayoutMethod(method) });
 };
 
 export const savePayoutMethod = async (req: Request, res: Response) => {
@@ -192,12 +192,12 @@ export const savePayoutMethod = async (req: Request, res: Response) => {
     bankName,
     recipientCode,
   });
-  return res.json({ success: true, data: result });
+  return res.json({ success: true, data: paymentService.toSafePayoutMethod(result) });
 };
 
 export const updatePayoutMethod = async (req: Request, res: Response) => {
   const result = await paymentService.updatePayoutMethod(req.user!.id, req.body);
-  return res.json({ success: true, data: result });
+  return res.json({ success: true, data: paymentService.toSafePayoutMethod(result) });
 };
 
 export const deletePayoutMethod = async (req: Request, res: Response) => {

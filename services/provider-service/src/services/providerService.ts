@@ -111,10 +111,10 @@ const checkServiceCompletenessInternal = async (
     where: { categoryId, isActive: true, isRequired: true },
   });
 
-  if (requirements.length > 0) {
-    const approvedDocs = new Set(
+if (requirements.length > 0) {
+    const submittedDocs = new Set(
       (await prisma.providerDocument.findMany({
-        where: { providerId, requirementId: { not: null }, status: "approved" },
+        where: { providerId, requirementId: { not: null }, status: { not: "uploaded" } },
       })).filter((d) => d.requirementId).map((d) => d.requirementId),
     );
     const answeredReqIds = new Set(
@@ -125,7 +125,7 @@ const checkServiceCompletenessInternal = async (
 
     for (const req of requirements) {
       if (req.type === "document" || req.type === "certification") {
-        if (!approvedDocs.has(req.id)) return false;
+        if (!submittedDocs.has(req.id)) return false;
       } else if (req.type === "attestation") {
         if (!answeredReqIds.has(req.id)) return false;
       }
@@ -146,7 +146,7 @@ const checkServiceCompletenessInternal = async (
     if (serviceRequirements.length > 0) {
       const serviceDocs = new Set(
         (await prisma.providerDocument.findMany({
-          where: { providerId, serviceRequirementId: { not: null }, status: "approved" },
+          where: { providerId, serviceRequirementId: { not: null }, status: { not: "uploaded" } },
         })).filter((d) => d.serviceRequirementId).map((d) => d.serviceRequirementId),
       );
       const answeredServiceReqIds = new Set(

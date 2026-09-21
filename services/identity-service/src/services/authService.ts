@@ -12,7 +12,7 @@ import type { RegisterInput, LoginInput } from "../validation/authValidation";
 const EMAIL_VERIFICATION_EXPIRY_HOURS = 24;
 
 const createEmailVerificationToken = () => {
-  const token = crypto.randomBytes(32).toString("hex");
+  const token = crypto.randomBytes(3).toString("hex").toUpperCase();
   const expiresAt = new Date(
     Date.now() + EMAIL_VERIFICATION_EXPIRY_HOURS * 60 * 60 * 1000,
   );

@@ -111,10 +111,11 @@ type BookingRow = Awaited<ReturnType<typeof getBookingById>>;
  * the field is `null` rather than failing the read.
  */
 const enrichBooking = async (booking: BookingRow) => {
-  const [serviceResult, providerProfile, user] = await Promise.allSettled([
+  const [serviceResult, providerProfile, user, customerUser] = await Promise.allSettled([
     fetchService(booking.serviceId),
     booking.providerId ? fetchProvider(booking.providerId) : Promise.resolve(null),
     booking.providerUserId ? fetchUser(booking.providerUserId) : Promise.resolve(null),
+    fetchUser(booking.customerId),
   ]);
 
   const service =
@@ -144,7 +145,18 @@ const enrichBooking = async (booking: BookingRow) => {
         }
       : null;
 
-  return { ...booking, service, provider };
+  const customer =
+    customerUser.status === "fulfilled" && customerUser.value
+      ? {
+          id: customerUser.value.id,
+          name:
+            `${customerUser.value.firstName ?? ""} ${customerUser.value.lastName ?? ""}`.trim() ||
+            undefined,
+          phone: customerUser.value.phone ?? null,
+        }
+      : null;
+
+  return { ...booking, service, provider, customer };
 };
 
 export const getBookingDetail = async (

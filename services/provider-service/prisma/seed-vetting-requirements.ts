@@ -39,12 +39,127 @@ function slugify(input: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+// Former category-level questionnaires, now seeded per-service.
+const CLEANING_QUESTIONS: QuestionInput[] = [
+  {
+    question: "How many years of professional cleaning experience do you have?",
+    type: "single_choice",
+    options: [
+      "Less than 1 year",
+      "1-3 years",
+      "3-5 years",
+      "5-10 years",
+      "10+ years",
+    ],
+    isRequired: true,
+    sortOrder: 0,
+  },
+  {
+    question: "What cleaning services do you offer?",
+    type: "multiple_choice",
+    options: [
+      "Residential",
+      "Commercial",
+      "Post-construction",
+      "Deep cleaning",
+      "Move-in/out",
+    ],
+    isRequired: true,
+    sortOrder: 1,
+  },
+  {
+    question: "Do you bring your own supplies and equipment?",
+    type: "yes_no",
+    isRequired: true,
+    sortOrder: 2,
+  },
+  {
+    question: "Are you experienced with eco-friendly products?",
+    type: "yes_no",
+    isRequired: false,
+    sortOrder: 3,
+  },
+];
+
+const PLUMBING_QUESTIONS: QuestionInput[] = [
+  {
+    question: "How many years of professional plumbing experience do you have?",
+    type: "single_choice",
+    options: [
+      "Less than 1 year",
+      "1-3 years",
+      "3-5 years",
+      "5-10 years",
+      "10+ years",
+    ],
+    isRequired: true,
+    sortOrder: 0,
+  },
+  {
+    question: "What pipe materials do you work with?",
+    type: "multiple_choice",
+    options: ["PVC", "PEX", "Copper", "Galvanized steel", "Other"],
+    isRequired: true,
+    sortOrder: 1,
+  },
+  {
+    question: "Do you carry your own tools?",
+    type: "yes_no",
+    isRequired: true,
+    sortOrder: 2,
+  },
+  {
+    question: "Have you worked on residential, commercial, or both?",
+    type: "single_choice",
+    options: ["Residential", "Commercial", "Both"],
+    isRequired: true,
+    sortOrder: 3,
+  },
+  {
+    question: "Are you comfortable with emergency callouts?",
+    type: "yes_no",
+    isRequired: false,
+    sortOrder: 4,
+  },
+];
+
+const ELECTRICAL_QUESTIONS: QuestionInput[] = [
+  {
+    question: "How many years of electrical work experience do you have?",
+    type: "single_choice",
+    options: [
+      "Less than 1 year",
+      "1-3 years",
+      "3-5 years",
+      "5-10 years",
+      "10+ years",
+    ],
+    isRequired: true,
+    sortOrder: 0,
+  },
+  {
+    question: "Do you carry your own tools and testing equipment?",
+    type: "yes_no",
+    isRequired: true,
+    sortOrder: 1,
+  },
+  {
+    question: "Are you familiar with Ghana Energy Commission standards?",
+    type: "yes_no",
+    isRequired: true,
+    sortOrder: 2,
+  },
+];
+
+// Utility to renumber a merged set of service questions in array order.
+const mergeQuestions = (lists: QuestionInput[][]): QuestionInput[] =>
+  lists.flat().map((q, idx) => ({ ...q, sortOrder: idx }));
+
 const CATEGORY_SEEDS: Record<
   string,
   {
     safetyRiskLevel: string;
     requirements: RequirementInput[];
-    questions?: QuestionInput[];
     serviceRequirements?: Record<string, ServiceLevelSeed>;
   }
 > = {
@@ -69,47 +184,6 @@ const CATEGORY_SEEDS: Record<
         sortOrder: 1,
       },
     ],
-    questions: [
-      {
-        question:
-          "How many years of professional cleaning experience do you have?",
-        type: "single_choice",
-        options: [
-          "Less than 1 year",
-          "1-3 years",
-          "3-5 years",
-          "5-10 years",
-          "10+ years",
-        ],
-        isRequired: true,
-        sortOrder: 0,
-      },
-      {
-        question: "What cleaning services do you offer?",
-        type: "multiple_choice",
-        options: [
-          "Residential",
-          "Commercial",
-          "Post-construction",
-          "Deep cleaning",
-          "Move-in/out",
-        ],
-        isRequired: true,
-        sortOrder: 1,
-      },
-      {
-        question: "Do you bring your own supplies and equipment?",
-        type: "yes_no",
-        isRequired: true,
-        sortOrder: 2,
-      },
-      {
-        question: "Are you experienced with eco-friendly products?",
-        type: "yes_no",
-        isRequired: false,
-        sortOrder: 3,
-      },
-    ],
     serviceRequirements: {
       "pressure-washing": {
         requirements: [
@@ -131,15 +205,18 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 1,
           },
         ],
-        questions: [
-          {
-            question: "What pressure washer types do you use?",
-            type: "multiple_choice",
-            options: ["Electric", "Petrol", "Both"],
-            isRequired: true,
-            sortOrder: 0,
-          },
-        ],
+        questions: mergeQuestions([
+          [
+            {
+              question: "What pressure washer types do you use?",
+              type: "multiple_choice",
+              options: ["Electric", "Petrol", "Both"],
+              isRequired: true,
+              sortOrder: 0,
+            },
+          ],
+          CLEANING_QUESTIONS,
+        ]),
       },
       "window-cleaning": {
         requirements: [
@@ -152,6 +229,7 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 0,
           },
         ],
+        questions: CLEANING_QUESTIONS,
       },
     },
   },
@@ -185,49 +263,6 @@ const CATEGORY_SEEDS: Record<
         sortOrder: 2,
       },
     ],
-    questions: [
-      {
-        question:
-          "How many years of professional plumbing experience do you have?",
-        type: "single_choice",
-        options: [
-          "Less than 1 year",
-          "1-3 years",
-          "3-5 years",
-          "5-10 years",
-          "10+ years",
-        ],
-        isRequired: true,
-        sortOrder: 0,
-      },
-      {
-        question: "What pipe materials do you work with?",
-        type: "multiple_choice",
-        options: ["PVC", "PEX", "Copper", "Galvanized steel", "Other"],
-        isRequired: true,
-        sortOrder: 1,
-      },
-      {
-        question: "Do you carry your own tools?",
-        type: "yes_no",
-        isRequired: true,
-        sortOrder: 2,
-      },
-      {
-        question:
-          "Have you worked on residential, commercial, or both?",
-        type: "single_choice",
-        options: ["Residential", "Commercial", "Both"],
-        isRequired: true,
-        sortOrder: 3,
-      },
-      {
-        question: "Are you comfortable with emergency callouts?",
-        type: "yes_no",
-        isRequired: false,
-        sortOrder: 4,
-      },
-    ],
     serviceRequirements: {
       "water-heater-installation-repair": {
         requirements: [
@@ -249,15 +284,18 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 1,
           },
         ],
-        questions: [
-          {
-            question: "What types of water heaters do you service?",
-            type: "multiple_choice",
-            options: ["Electric", "Gas", "Solar", "On-demand/Tankless"],
-            isRequired: true,
-            sortOrder: 0,
-          },
-        ],
+        questions: mergeQuestions([
+          [
+            {
+              question: "What types of water heaters do you service?",
+              type: "multiple_choice",
+              options: ["Electric", "Gas", "Solar", "On-demand/Tankless"],
+              isRequired: true,
+              sortOrder: 0,
+            },
+          ],
+          PLUMBING_QUESTIONS,
+        ]),
       },
       "water-tank-installation": {
         requirements: [
@@ -270,6 +308,7 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 0,
           },
         ],
+        questions: PLUMBING_QUESTIONS,
       },
       "drain-unclogging": {
         requirements: [
@@ -282,6 +321,7 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 0,
           },
         ],
+        questions: PLUMBING_QUESTIONS,
       },
     },
   },
@@ -316,36 +356,6 @@ const CATEGORY_SEEDS: Record<
         sortOrder: 2,
       },
     ],
-    questions: [
-      {
-        question:
-          "How many years of electrical work experience do you have?",
-        type: "single_choice",
-        options: [
-          "Less than 1 year",
-          "1-3 years",
-          "3-5 years",
-          "5-10 years",
-          "10+ years",
-        ],
-        isRequired: true,
-        sortOrder: 0,
-      },
-      {
-        question:
-          "Do you carry your own tools and testing equipment?",
-        type: "yes_no",
-        isRequired: true,
-        sortOrder: 1,
-      },
-      {
-        question:
-          "Are you familiar with Ghana Energy Commission standards?",
-        type: "yes_no",
-        isRequired: true,
-        sortOrder: 2,
-      },
-    ],
     serviceRequirements: {
       "inverter-installation": {
         requirements: [
@@ -367,6 +377,7 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 1,
           },
         ],
+        questions: ELECTRICAL_QUESTIONS,
       },
       "generator-installation": {
         requirements: [
@@ -380,6 +391,7 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 0,
           },
         ],
+        questions: ELECTRICAL_QUESTIONS,
       },
       "new-electrical-wiring": {
         requirements: [
@@ -393,6 +405,7 @@ const CATEGORY_SEEDS: Record<
             sortOrder: 0,
           },
         ],
+        questions: ELECTRICAL_QUESTIONS,
       },
     },
   },
@@ -932,12 +945,11 @@ async function main() {
 
   let requirementsCreated = 0;
   let requirementsUpdated = 0;
-  let questionsCreated = 0;
-  let questionsUpdated = 0;
   let serviceRequirementsCreated = 0;
   let serviceRequirementsUpdated = 0;
   let serviceQuestionsCreated = 0;
   let serviceQuestionsUpdated = 0;
+  let categoryQuestionsDeleted = 0;
   let riskLevelsUpdated = 0;
   let categoriesSkipped = 0;
 
@@ -995,38 +1007,18 @@ async function main() {
       }
     }
 
-    // Upsert questions
-    if (seed.questions) {
-      for (const q of seed.questions) {
-        const existing = await prisma.categoryQuestion.findFirst({
-          where: { categoryId: category.id, question: q.question },
-        });
-
-        if (existing) {
-          await prisma.categoryQuestion.update({
-            where: { id: existing.id },
-            data: {
-              type: q.type,
-              options: q.options ?? [],
-              isRequired: q.isRequired,
-              sortOrder: q.sortOrder,
-            },
-          });
-          questionsUpdated++;
-        } else {
-          await prisma.categoryQuestion.create({
-            data: {
-              categoryId: category.id,
-              question: q.question,
-              type: q.type,
-              options: q.options ?? [],
-              isRequired: q.isRequired,
-              sortOrder: q.sortOrder,
-            },
-          });
-          questionsCreated++;
-        }
-      }
+    // Questions are service-level only — clean up any leftover category-level questions.
+    const leftoverQuestions = await prisma.categoryQuestion.findMany({
+      where: { categoryId: category.id },
+    });
+    if (leftoverQuestions.length > 0) {
+      await prisma.categoryQuestion.deleteMany({
+        where: { categoryId: category.id },
+      });
+      categoryQuestionsDeleted += leftoverQuestions.length;
+      console.log(
+        `  Removed ${leftoverQuestions.length} category-level question(s) for ${category.name}`,
+      );
     }
 
     // Upsert service-level requirements and questions
@@ -1115,8 +1107,7 @@ async function main() {
   console.log(`Safety risk levels updated: ${riskLevelsUpdated}`);
   console.log(`Requirements created: ${requirementsCreated}`);
   console.log(`Requirements updated: ${requirementsUpdated}`);
-  console.log(`Questions created: ${questionsCreated}`);
-  console.log(`Questions updated: ${questionsUpdated}`);
+  console.log(`Category questions removed: ${categoryQuestionsDeleted}`);
   console.log(`Service requirements created: ${serviceRequirementsCreated}`);
   console.log(`Service requirements updated: ${serviceRequirementsUpdated}`);
   console.log(`Service questions created: ${serviceQuestionsCreated}`);
