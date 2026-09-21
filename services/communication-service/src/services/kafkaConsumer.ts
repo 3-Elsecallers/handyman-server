@@ -195,12 +195,10 @@ export const startKafkaConsumers = async () => {
   await createConsumer("booking.created", async (value) => {
     const event = value as unknown as CreatedBookingEvent;
 
-    if (event.customerId && event.providerId) {
-      await getOrCreateConversation(
-        event.bookingId,
-        event.customerId,
-        event.providerId,
-      );
+    const providerUserId =
+      event.providerUserId ?? (await resolveProviderUserId(event.providerId)) ?? undefined;
+    if (event.customerId && providerUserId) {
+      await getOrCreateConversation(event.bookingId, event.customerId, providerUserId);
     }
 
     const serviceName = event.serviceId

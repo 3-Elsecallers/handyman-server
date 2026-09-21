@@ -647,6 +647,7 @@ export const startBooking = async (bookingId: string, providerId: string) => {
     bookingId: booking.id,
     customerId: booking.customerId,
     providerId: booking.providerId,
+    providerUserId: booking.providerUserId,
   });
 
   return updated;
